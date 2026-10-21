@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="t">
+  <title id="t">VitalPat</title>
+  <!-- Escudo VitalPat (aprovado em 07/10/2026, opção B): escudo e V em marinho, P em dourado fosco; o P nasce da perna do V. -->
+  <path d="M60 9 L101 23 V57 C101 84 83 102 60 111 C37 102 19 84 19 57 V23 Z" fill="none" stroke="#16365a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M37 38 L55 84 L71 44" fill="none" stroke="#16365a" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M71 44 V38 H80 A13 13 0 0 1 80 64 H69" fill="none" stroke="#b8902f" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

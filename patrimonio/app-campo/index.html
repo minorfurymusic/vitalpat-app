@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#16365a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="VP Patrimônio">
+  <meta name="description" content="VitalPat Patrimônio, aplicativo de campo (demonstração): conferência de bens e frota de veículos, funcionando sem internet.">
+  <title>VitalPat Patrimônio</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icones/icone-vitalpat.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icones/icone-192.png">
+  <link rel="stylesheet" href="estilo.css">
+  <script>
+    // Só entra quem fez login com um usuário deste sistema (ver ../../index.html).
+    (function () {
+      var s = null;
+      try { s = JSON.parse(localStorage.getItem('vitalpat-sessao')); } catch (e) { s = null; }
+      if (!s || s.sistema !== 'patrimonio') {
+        window.VP_SEM_ACESSO = true;
+        location.replace('../../index.html' + (s ? '?motivo=sem-acesso' : ''));
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header>
+    <button class="voltar oculto" id="voltar" aria-label="Voltar">←</button>
+    <img class="marca" src="icones/icone-vitalpat.svg" alt="VitalPat" width="34" height="34">
+    <h1 id="titulo">VitalPat Patrimônio</h1>
+    <span class="selo" id="conexao">…</span>
+    <button class="sair" id="sair">Sair</button>
+  </header>
+  <main id="tela"></main>
+  <div class="mensagem oculto" id="mensagem" role="status"></div>
+  <script src="vendor/supabase.js"></script>
+  <script src="../config-servidor.js"></script>
+  <script src="envio.js"></script>
+  <script src="dados-exemplo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

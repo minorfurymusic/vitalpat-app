@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#16365a">
+  <title>VitalPat — Entrar</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 120 120%22 role=%22img%22 aria-labelledby=%22t%22%3E %3Cpath d=%22M60 9 L101 23 V57 C101 84 83 102 60 111 C37 102 19 84 19 57 V23 Z%22 fill=%22none%22 stroke=%22%2316365a%22 stroke-width=%227%22 stroke-linejoin=%22round%22/%3E %3Cpath d=%22M37 38 L55 84 L71 44%22 fill=%22none%22 stroke=%22%2316365a%22 stroke-width=%229.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E %3Cpath d=%22M71 44 V38 H80 A13 13 0 0 1 80 64 H69%22 fill=%22none%22 stroke=%22%23b8902f%22 stroke-width=%229.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E %3C/svg%3E">
+  <style>
+    :root { --fundo:#f4f6f8; --cartao:#fff; --texto:#1b2430; --suave:#5b6675; --borda:#d6dce3; --primaria:#16365a; --primaria-texto:#fff; --perigo:#b42318; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fundo:#12171d; --cartao:#1c242d; --texto:#e8edf2; --suave:#9aa6b4; --borda:#2f3b47; --primaria:#6f9fd6; --primaria-texto:#0d1318; --perigo:#ff7a6e; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:16px; background:var(--fundo); color:var(--texto);
+           font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+    .caixa { width:100%; max-width:400px; background:var(--cartao); border:1px solid var(--borda); border-radius:14px; padding:24px; }
+    .logo { display:block; margin:0 auto 8px; width:260px; max-width:70%; height:auto; background:#fff; border-radius:10px; padding:8px; }
+    h1 { font-size:20px; text-align:center; margin:8px 0 16px; }
+    label { display:block; font-weight:600; margin:14px 0 6px; }
+    input { width:100%; font:inherit; color:var(--texto); background:var(--cartao); border:1px solid var(--borda); border-radius:10px; padding:12px; min-height:48px; }
+    button { width:100%; margin-top:20px; font:inherit; font-weight:600; border:0; border-radius:10px; background:var(--primaria); color:var(--primaria-texto); min-height:48px; cursor:pointer; }
+    .erro { color:var(--perigo); font-weight:600; margin:12px 0 0; min-height:1.4em; }
+    .ajuda { color:var(--suave); font-size:14px; text-align:center; margin:16px 0 0; }
+    .ok { color:var(--suave); margin:12px 0 0; }
+    .link { background:none; color:var(--primaria); text-decoration:underline; min-height:auto; margin-top:12px; font-weight:400; }
+    .escolha { margin-top:12px; }
+    [hidden] { display:none !important; }
+  </style>
+</head>
+<body>
+  <main class="caixa">
+    <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 120" role="img" aria-label="VitalPat">
+  <!-- Marca VitalPat (aprovada em 07/10/2026, opção B): escudo + nome. Marinho #16365a e dourado fosco #b8902f. -->
+  <path d="M60 9 L101 23 V57 C101 84 83 102 60 111 C37 102 19 84 19 57 V23 Z" fill="none" stroke="#16365a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M37 38 L55 84 L71 44" fill="none" stroke="#16365a" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M71 44 V38 H80 A13 13 0 0 1 80 64 H69" fill="none" stroke="#b8902f" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="122" y="80" font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-size="64" letter-spacing="-1.5"><tspan fill="#16365a" font-weight="400">Vital</tspan><tspan fill="#b8902f" font-weight="800">Pat</tspan></text>
+</svg>
+    <h1>Entrar no VitalPat</h1>
+    <form id="form" autocomplete="on">
+      <label for="usuario" id="rotulo-usuario">Usuário</label>
+      <input id="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" autocomplete="current-password" required>
+      <p class="erro" id="erro" role="alert"></p>
+      <button type="submit" id="entrar">Entrar</button>
+      <button type="button" class="link" id="esqueci" hidden>Esqueci a senha</button>
+    </form>
+    <div id="escolher" hidden>
+      <p>Você tem acesso aos dois sistemas. Qual quer abrir?</p>
+      <div id="opcoes"></div>
+    </div>
+    <form id="form-nova" hidden>
+      <label for="nova">Nova senha (mínimo 8 caracteres)</label>
+      <input id="nova" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="erro" id="erro-nova" role="alert"></p>
+      <button type="submit">Salvar nova senha</button>
+    </form>
+    <p class="ajuda" id="rodape">Versão de demonstração.</p>
+  </main>
+  <script src="vendor/supabase.js"></script>
+  <script src="patrimonio/config-servidor.js"></script>
+  <script src="cemiterio/config-servidor.js"></script>
+  <script>
+    'use strict';
+    const CHAVE = 'vitalpat-sessao';
+    const NOMES = { patrimonio: 'Patrimônio', cemiterio: 'Cemitério' };
+    const MENSAGENS = {
+      'sem-acesso': 'Este usuário não tem acesso a esse sistema. Entre com o usuário certo.',
+      'expirou': 'Sua sessão terminou. Entre de novo.',
+      'inativo': 'Seu acesso ainda não foi liberado pelo administrador.',
+      'saiu': ''
+    };
+    const $ = (id) => document.getElementById(id);
+    const lerSessao = () => { try { return JSON.parse(localStorage.getItem(CHAVE)); } catch (_) { return null; } };
+    const gravarSessao = (s) => { localStorage.setItem(CHAVE, JSON.stringify(Object.assign({ desde: new Date().toISOString() }, s))); };
+    const destino = (sistema, papel) => `${sistema}/${papel === 'campo' ? 'app-campo' : 'gestao'}/`;
+    const motivo = new URLSearchParams(location.search).get('motivo');
+    $('erro').textContent = MENSAGENS[motivo] || '';
+
+    // Servidores desta instalação (arquivos */config-servidor.js). Nenhum preenchido = modo demonstração.
+    const CONFIG = { patrimonio: window.VP_SERVIDOR_PATRIMONIO, cemiterio: window.VP_SERVIDOR_CEMITERIO };
+    const SERVIDORES = Object.keys(CONFIG).filter((k) => CONFIG[k] && CONFIG[k].url && CONFIG[k].chavePublica);
+    const MODO_SERVIDOR = SERVIDORES.length > 0;
+    // Mesmo nome de armazenamento usado pelos sistemas: a sessão aberta aqui vale lá dentro.
+    const clientes = {};
+    const cliente = (k) => clientes[k] || (clientes[k] = window.supabase.createClient(CONFIG[k].url, CONFIG[k].chavePublica, { db: { schema: k }, auth: { storageKey: `vitalpat-auth-${k}`, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }));
+
+    if (!MODO_SERVIDOR) {
+      // ------------------------------------------------------------ DEMONSTRAÇÃO
+      // Este login roda só no navegador e serve para separar as telas de cada sistema. Não é proteção de verdade.
+      // Senhas guardadas como resumo SHA-256 de "vitalpat:<usuario>:<senha>".
+      const USUARIOS = {
+        selemiterio: { sistema: 'cemiterio', resumo: '54edf62662a19b67af8634e293cc5225352192dbba1f11db7a06fdd6f3803dbe' },
+        patrimonio: { sistema: 'patrimonio', resumo: 'ff5df2fbcabe74a6d985e4215ba282c229325f8c1f58a4f19f900234def3af5a' }
+      };
+      // Aceita maiúsculas, espaços nas pontas e com ou sem acento ("Selemitério" = "selemiterio").
+      const normalizar = (t) => String(t || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const resumo = async (texto) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+      const atual = lerSessao();
+      if (atual && atual.modo !== 'servidor' && USUARIOS[atual.usuario] && motivo !== 'sem-acesso') location.replace(destino(USUARIOS[atual.usuario].sistema));
+      $('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const usuario = normalizar($('usuario').value);
+        const u = USUARIOS[usuario];
+        if (!u || (await resumo(`vitalpat:${usuario}:${$('senha').value}`)) !== u.resumo) { $('erro').textContent = 'Usuário ou senha incorretos.'; return; }
+        try { gravarSessao({ usuario, sistema: u.sistema, modo: 'demo' }); }
+        catch (_) { $('erro').textContent = 'Este navegador não permite guardar o acesso. Saia do modo anônimo e tente de novo.'; return; }
+        location.replace(destino(u.sistema));
+      });
+    } else {
+      // ------------------------------------------------------------ SERVIDOR (Supabase): e-mail e senha
+      $('rotulo-usuario').textContent = 'E-mail';
+      $('usuario').type = 'email';
+      $('usuario').autocomplete = 'email';
+      $('esqueci').hidden = false;
+      $('rodape').textContent = SERVIDORES.map((k) => `${NOMES[k]}${CONFIG[k].municipio ? ' · ' + CONFIG[k].municipio : ''}`).join(' | ');
+      
+      // Perfil da pessoa neste banco: null = não cadastrada; { ativo:false } = aguardando liberação
+      const perfil = async (k) => {
+        const c = cliente(k);
+        const { data: s } = await c.auth.getSession();
+        if (!s.session) return null;
+        const { data, error } = await c.from('perfis').select('nome, papel, ativo').eq('user_id', s.session.user.id).maybeSingle();
+        if (error) throw error;
+        return data ? Object.assign({ email: s.session.user.email }, data) : null;
+      };
+      const abrir = (k, p) => { gravarSessao({ usuario: p.email, nome: p.nome, sistema: k, papel: p.papel, modo: 'servidor' }); location.replace(destino(k, p.papel)); };
+      const escolher = (acessos) => {
+        if (acessos.length === 1) return abrir(acessos[0].k, acessos[0].p);
+        $('form').hidden = true; $('escolher').hidden = false;
+        $('opcoes').innerHTML = acessos.map((a, i) => `<button type="button" class="escolha" data-i="${i}">${NOMES[a.k]}</button>`).join('');
+        $('opcoes').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => abrir(acessos[+b.dataset.i].k, acessos[+b.dataset.i].p)));
+      };
+
+      // Redefinir senha: o link do e-mail volta para cá com ?redefinir=<sistema>
+      const redefinir = new URLSearchParams(location.search).get('redefinir');
+      if (redefinir && SERVIDORES.includes(redefinir)) {
+        const c = window.supabase.createClient(CONFIG[redefinir].url, CONFIG[redefinir].chavePublica, { auth: { storageKey: `vitalpat-auth-${redefinir}`, detectSessionInUrl: true } });
+        clientes[redefinir] = c;
+        $('form').hidden = true; $('form-nova').hidden = false;
+        $('form-nova').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const { error } = await c.auth.updateUser({ password: $('nova').value });
+          if (error) { $('erro-nova').textContent = 'Não foi possível trocar a senha. Peça um novo link.'; return; }
+          await c.auth.signOut();
+          location.replace('index.html?motivo=saiu');
+        });
+      } else if (motivo !== 'sem-acesso' && motivo !== 'saiu') {
+        // Já entrou antes: vai direto
+        const atual = lerSessao();
+        if (atual && atual.modo === 'servidor' && SERVIDORES.includes(atual.sistema)) {
+          perfil(atual.sistema).then((p) => { if (p && p.ativo) location.replace(destino(atual.sistema, p.papel)); }).catch(() => {});
+        }
+      }
+
+      $('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        $('erro').textContent = ''; $('entrar').disabled = true; $('entrar').textContent = 'Entrando…';
+        const email = $('usuario').value.trim().toLowerCase(), senha = $('senha').value;
+        const acessos = [], inativos = [];
+        let falhaRede = false;
+        for (const k of SERVIDORES) {
+          try {
+            const { error } = await cliente(k).auth.signInWithPassword({ email, password: senha });
+            if (error) { if (error.status === 0 || /fetch|network/i.test(error.message)) falhaRede = true; continue; }
+            const p = await perfil(k);
+            if (p && p.ativo) acessos.push({ k, p }); else { inativos.push(k); await cliente(k).auth.signOut(); }
+          } catch (_) { falhaRede = true; }
+        }
+        $('entrar').disabled = false; $('entrar').textContent = 'Entrar';
+        if (acessos.length) return escolher(acessos);
+        $('erro').textContent = inativos.length ? MENSAGENS.inativo : falhaRede ? 'Sem conexão com o servidor. Confira a internet e tente de novo.' : 'E-mail ou senha incorretos.';
+      });
+
+      $('esqueci').addEventListener('click', async () => {
+        const email = $('usuario').value.trim().toLowerCase();
+        if (!email) { $('erro').textContent = 'Digite seu e-mail acima e clique de novo em "Esqueci a senha".'; return; }
+        for (const k of SERVIDORES) {
+          await cliente(k).auth.resetPasswordForEmail(email, { redirectTo: new URL(`index.html?redefinir=${k}`, location.href).href }).catch(() => {});
+        }
+        $('erro').textContent = '';
+        $('rodape').textContent = 'Se o e-mail estiver cadastrado, chegará um link para criar nova senha.';
+      });
+    }
+  </script>
+</body>
+</html>

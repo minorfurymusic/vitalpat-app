@@ -110,7 +110,30 @@
       campos: () => [{ chave: 'nome', rotulo: 'Item', obrigatorio: true }, { chave: 'escolha', rotulo: 'Decisão', tipo: 'select', vazio: false, opcoes: [['controle', 'Item de controle (sem plaqueta)'], ['patrimonio', 'Patrimônio (com plaqueta)']] }],
       antesDeSalvar: (d) => { d.ultimaEm = d.ultimaEm || VP.Plataforma.hoje(); },
       colunas: [{ chave: 'nome', titulo: 'Item' }, { chave: 'escolha', titulo: 'Decisão', valor: (x) => (x.escolha === 'controle' ? 'Item de controle' : 'Patrimônio (plaqueta)') }, { chave: 'ultimaEm', titulo: 'Última vez', valor: (x) => VP.u.data(x.ultimaEm), ordenar: (x) => x.ultimaEm }, { chave: 'vezes', titulo: 'Vezes (controle / plaqueta)', valor: (x) => `${x.vezes?.controle || 0} / ${x.vezes?.patrimonio || 0}` }, { chave: 'ultimoValor', titulo: 'Último valor', valor: (x) => (x.ultimoValor != null ? VP.u.moeda(x.ultimoValor) : '') }] },
-    tiposGarantia: { titulo: 'Tipos de garantia', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }], colunas: [{ chave: 'nome', titulo: 'Nome' }] }
+    tiposGarantia: { titulo: 'Tipos de garantia', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }], colunas: [{ chave: 'nome', titulo: 'Nome' }] },
+    // Matrículas do cartório (22/10/2026): cadastro separado do imóvel. Um imóvel pode estar em várias matrículas e uma
+    // matrícula pode ter vários imóveis; a ligação é feita por pessoa (etapa seguinte). Baixada nunca é apagada.
+    matriculas: { titulo: 'Matrículas (cartório)',
+      intro: () => '<p class="ajuda"><b>O que é:</b> o registro do terreno no cartório. Não é o imóvel: um imóvel (escola, posto) pode estar em mais de uma matrícula, e uma matrícula pode ter mais de um imóvel. A <b>Situação</b> diz se ainda vale (Ativa), se saiu do patrimônio (Baixada), se o cartório fechou a matrícula (Encerrada) ou se alguém precisa olhar (A conferir). O <b>Cadastro imobiliário</b> é o número usado no sistema da prefeitura (pode haver mais de um, separados por ";"). Para trazer muitas de uma vez: <b>Importar planilha unificada</b>, aba "Matrículas".</p>',
+      ordenar: (l) => l.sort((a, b) => String(a.matricula).localeCompare(String(b.matricula), 'pt-BR', { numeric: true })),
+      campos: () => [
+        { chave: 'matricula', rotulo: 'Matrícula', obrigatorio: true, largura: 'meia', ajuda: 'Transcrição antiga: como está no livro (ex.: 734-3). Sem registro: SR-0001…' },
+        { chave: 'tipoRegistro', rotulo: 'Tipo de registro', tipo: 'select', vazio: false, opcoes: VP.TIPOS_REGISTRO_MATRICULA, largura: 'meia' },
+        { chave: 'cartorio', rotulo: 'Cartório' },
+        { chave: 'cadastrosImobiliarios', rotulo: 'Cadastro imobiliário (sistema da prefeitura)', largura: 'meia', ajuda: 'Mais de um: separe com ";".' }, { chave: 'tipoImovel', rotulo: 'Tipo (rua, terreno, área verde…)', largura: 'meia' },
+        { chave: 'logradouro', rotulo: 'Logradouro' }, { chave: 'numeroEndereco', rotulo: 'Nº', largura: 'meia' }, { chave: 'bairro', rotulo: 'Bairro', largura: 'meia' },
+        { chave: 'descricao', rotulo: 'Descrição (complemento)' }, { chave: 'observacao', rotulo: 'Observação', tipo: 'area' },
+        { chave: 'situacao', rotulo: 'Situação', tipo: 'select', vazio: false, opcoes: VP.SITUACOES_MATRICULA, largura: 'meia' }, { chave: 'motivoSituacao', rotulo: 'Motivo da situação', largura: 'meia' },
+        { chave: 'proprietario', rotulo: 'Proprietário no cartório', largura: 'meia', ajuda: 'Quem é dono no cartório (Município, Estado, entidade…). Não é quem cuida do imóvel.' }, { chave: 'areaCartorio', rotulo: 'Área no cartório (m²)', tipo: 'numero', largura: 'meia', ajuda: 'A área que vale (oficial).' },
+        { chave: 'area', rotulo: 'Área na planilha (m²)', tipo: 'numero', largura: 'meia' }, { chave: 'areaCelula', rotulo: 'Área: célula original', largura: 'meia', ajuda: 'Quando a planilha tinha dois números na mesma célula.' },
+        { chave: 'lat', rotulo: 'Latitude', tipo: 'numero', largura: 'meia' }, { chave: 'lon', rotulo: 'Longitude', tipo: 'numero', largura: 'meia' },
+        { chave: 'linhasOrigem', rotulo: 'Linhas de origem (planilha da prefeitura)' }, { chave: 'avisos', rotulo: 'Avisos', tipo: 'area' }],
+      antesDeSalvar: (d) => { d.nome = `Matrícula ${d.matricula}`; d.imoveis = d.imoveis || []; },
+      colunas: [{ chave: 'matricula', titulo: 'Matrícula' }, { chave: 'tipoRegistro', titulo: 'Registro', valor: (x) => (VP.TIPOS_REGISTRO_MATRICULA.find(([k]) => k === x.tipoRegistro) || [, ''])[1] },
+        { chave: 'cadastrosImobiliarios', titulo: 'Cadastro imobiliário' }, { chave: 'tipoImovel', titulo: 'Tipo' },
+        { chave: 'end', titulo: 'Endereço', valor: (x) => [x.logradouro, x.numeroEndereco, x.bairro].filter(Boolean).join(', ') },
+        { chave: 'situacao', titulo: 'Situação', valor: (x) => (VP.SITUACOES_MATRICULA.find(([k]) => k === x.situacao) || [, ''])[1] },
+        { chave: 'proprietario', titulo: 'Dono no cartório' }, { chave: 'areaCartorio', titulo: 'Área cartório (m²)', num: true }, { chave: 'avisos', titulo: 'Avisos' }] }
   };
   const SO_LEITURA = {
     tiposBem: { titulo: 'Tipos de bem', linhas: () => Object.entries(L.tiposBem).map(([k, n]) => ({ id: k, nome: n, qtd: VP.db.lista('bens').filter((b) => b.tipo === k).length })), colunas: [{ chave: 'nome', titulo: 'Tipo' }, { chave: 'qtd', titulo: 'Bens', num: true }] },

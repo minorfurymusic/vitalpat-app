@@ -17,6 +17,8 @@
   const caminho = (c) => VP.caminhoClassificacao(c);
   const TIPOS_CONTA = [['ativo', 'Ativo (bens)'], ['depreciacao', 'Depreciação acumulada'], ['resultado', 'Resultado (despesa)']];
   const TIPOS_MOTIVO = [['baixa', 'Baixa'], ['desuso', 'Desuso'], ['manutencao', 'Manutenção'], ['transferencia', 'Transferência']];
+  const TIPOS_REGISTRO = VP.TIPOS_REGISTRO_MATRICULA = [['matricula', 'Matrícula'], ['transcricao', 'Transcrição (Livro 3)'], ['semRegistro', 'Sem registro'], ['conferir', 'A conferir']];
+  const SITUACOES_MATRICULA = VP.SITUACOES_MATRICULA = [['ativa', 'Ativa'], ['baixada', 'Baixada'], ['encerrada', 'Encerrada'], ['conferir', 'A conferir']];
 
   // ------------------------------------------------------------------ definição de cada aba
   // campos: k (campo do cadastro), t (título da coluna), tipo, obrig, apelidos, ref (outro cadastro), opcoes [[valor, rótulo]]
@@ -81,10 +83,26 @@
       { k: 'produtoId', t: 'Produto', tipo: 'ref', ref: 'produtos', obrig: true },
       { k: 'quantidade', t: 'Quantidade', tipo: 'numero', obrig: true }, { k: 'valorUnitario', t: 'Valor unitário', tipo: 'moeda', obrig: true, apelidos: ['valor unitario'] },
       { k: 'liquidado', t: 'Liquidado', tipo: 'bool' }],
-      chaves: (x) => [norm([x.entidadeId, x.ordemCompra?.numero, x.ordemCompra?.ano, x.empenho?.numero, x.empenho?.ano, x.fornecedorId, x.produtoId].join('|'))] }
+      chaves: (x) => [norm([x.entidadeId, x.ordemCompra?.numero, x.ordemCompra?.ano, x.empenho?.numero, x.empenho?.ano, x.fornecedorId, x.produtoId].join('|'))] },
+    // Matrículas do cartório (22/10/2026): separadas do imóvel; depois cada uma é ligada a um ou mais imóveis, sempre por pessoa.
+    // A planilha sai do script patrimonio/imoveis-gemini/monta-matriculas.py (aba "Matrículas"); os títulos das colunas são os mesmos.
+    matriculas: { aba: 'Matrículas', titulo: 'Matrícula', campos: [
+      { k: 'matricula', t: 'Matrícula', obrig: true, apelidos: ['numero da matricula', 'matricula do imovel'] },
+      { k: 'tipoRegistro', t: 'Tipo de registro', tipo: 'opcao', opcoes: TIPOS_REGISTRO, padrao: 'matricula' },
+      { k: 'cartorio', t: 'Cartório' },
+      { k: 'cadastrosImobiliarios', t: 'Cadastro imobiliário', apelidos: ['cadastro imobiliario', 'inscricao imobiliaria', 'cadastros imobiliarios'] },
+      { k: 'tipoImovel', t: 'Tipo' },
+      { k: 'logradouro', t: 'Logradouro', apelidos: ['endereco', 'rua'] }, { k: 'numeroEndereco', t: 'Nº', apelidos: ['n', 'n°', 'numero'] }, { k: 'bairro', t: 'Bairro' },
+      { k: 'descricao', t: 'Descrição (complemento)', apelidos: ['complemento', 'descricao'] }, { k: 'observacao', t: 'Observação', apelidos: ['obs'] },
+      { k: 'area', t: 'Área (m²) da planilha', tipo: 'numero', apelidos: ['area m2', 'area'] }, { k: 'areaCelula', t: 'Área: célula original' },
+      { k: 'lat', t: 'Latitude', tipo: 'numero' }, { k: 'lon', t: 'Longitude', tipo: 'numero' },
+      { k: 'situacao', t: 'Situação', tipo: 'opcao', opcoes: SITUACOES_MATRICULA, padrao: 'ativa' }, { k: 'motivoSituacao', t: 'Motivo da situação' },
+      { k: 'proprietario', t: 'Proprietário no cartório' }, { k: 'areaCartorio', t: 'Área (m²) no cartório', tipo: 'numero' },
+      { k: 'linhasOrigem', t: 'Linhas de origem' }, { k: 'avisos', t: 'Avisos' }],
+      chaves: (x) => [norm(x.matricula)], aoCriar: (x) => { x.tipoRegistro = x.tipoRegistro || 'matricula'; x.situacao = x.situacao || 'ativa'; x.imoveis = []; x.nome = `Matrícula ${x.matricula}`; } }
   };
   // ordem de gravação: quem é usado por outro vem antes
-  C.ORDEM = ['entidades', 'contas', 'responsaveis', 'unidades', 'fornecedores', 'motivos', 'comissoes', 'seguradoras', 'tiposGarantia', 'classificacoes', 'produtos', 'vidaUtilItens', 'decisoesItens', 'itensIncorporar'];
+  C.ORDEM = ['entidades', 'contas', 'responsaveis', 'unidades', 'fornecedores', 'motivos', 'comissoes', 'seguradoras', 'tiposGarantia', 'classificacoes', 'produtos', 'vidaUtilItens', 'decisoesItens', 'itensIncorporar', 'matriculas'];
   C.cj = (tabela) => 'cad:' + tabela;
   C.tabela = (cj) => String(cj).slice(4);
   C.ehCadastro = (cj) => String(cj).startsWith('cad:');
@@ -175,7 +193,7 @@
           const doc = Object.assign({}, v);
           const ex = def.chaves(doc).map((k) => k && porChave.get(k)).find(Boolean);
           it.plaqueta = limpo(v.codigo || v.matricula || (v.documento ? v.documento : '') || (tabela === 'itensIncorporar' ? (v.ordemCompra.numero ? `OC ${v.ordemCompra.numero}/${v.ordemCompra.ano}` : '') : ''));
-          it.descricao = `${def.titulo}: ${tabela === 'itensIncorporar' ? `${VP.nome('produtos', v.produtoId) || pendNome(pend, 'produtos', v.produtoId) || ''} × ${v.quantidade ?? ''}` : tabela === 'classificacoes' ? v._caminho : limpo(v.nome)}`;
+          it.descricao = `${def.titulo}: ${tabela === 'itensIncorporar' ? `${VP.nome('produtos', v.produtoId) || pendNome(pend, 'produtos', v.produtoId) || ''} × ${v.quantidade ?? ''}` : tabela === 'classificacoes' ? v._caminho : tabela === 'matriculas' ? [v.tipoImovel, v.logradouro, v.bairro].filter(Boolean).join(' · ') : limpo(v.nome)}`;
           if (ex && ex.excluido) it.erros.push('Já existe na Lixeira; restaure antes');
           else if (ex) {
             it.existenteId = ex.id;

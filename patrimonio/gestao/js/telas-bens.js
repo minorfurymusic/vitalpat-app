@@ -256,7 +256,9 @@
           <p>Plaqueta atual: <b>${esc(b.plaqueta)}</b></p>
           ${ants.length ? `<div class="tabela-rolagem"><table class="tabela" data-sem-planilha><thead><tr><th>Plaqueta anterior</th><th>Data</th><th>Motivo</th><th>Observação</th><th>Quem</th></tr></thead><tbody>${ants.map((a) => `<tr><td>${esc(a.plaqueta)}</td><td>${u.data(a.data)}</td><td>${esc(a.motivo || '')}</td><td>${esc(a.observacao || '')}</td><td>${esc(a.usuario || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="ajuda">Nenhuma plaqueta anterior.</p>'}</section>`; })()}
         ${cartao('Local e responsáveis', 'local', [['Unidade', VP.nome('unidades', b.unidadeId)], ['Localização', b.localizacao], ['Responsável', b.responsavelId ? VP.nome('responsaveis', b.responsavelId) : ''], ['Responsáveis adicionais', (b.responsaveisAdicionais || []).map((r) => VP.nome('responsaveis', r)).join(', ')], b.endereco ? ['Endereço', [b.endereco.logradouro, b.endereco.bairro, b.endereco.cidade].filter(Boolean).join(', ')] : null])}
-        ${cartao('Origem e compra', 'origem', [['Fornecedor', VP.nome('fornecedores', b.fornecedorId)], ['Empenho', b.origem?.empenho], ['Item do empenho', b.origem?.item], ['Quantidade', b.origem?.quantidade], ['Valor unitário', b.origem?.valorUnitario != null ? u.moeda(b.origem.valorUnitario) : ''], ['Nota fiscal', [b.nf?.numero, b.nf?.serie].filter(Boolean).join(' / série ')], ['Emissão da nota', u.data(b.nf?.emissao)], ['Licitação', [b.origem?.licitacao?.modalidade, b.origem?.licitacao?.processo && 'processo ' + b.origem.licitacao.processo, b.origem?.licitacao?.numero && 'nº ' + b.origem.licitacao.numero].filter(Boolean).join(' · ')]])}
+        ${cartao('Origem e compra', 'origem', [['Fornecedor', VP.nome('fornecedores', b.fornecedorId)], ['Empenho', b.origem?.empenho], ['Item do empenho', b.origem?.item], ['Quantidade', b.origem?.quantidade], ['Valor unitário', b.origem?.valorUnitario != null ? u.moeda(b.origem.valorUnitario) : ''], ['Nota fiscal', [b.nf?.numero, b.nf?.serie].filter(Boolean).join(' / série ')], ['Emissão da nota', u.data(b.nf?.emissao)], ['Licitação', [b.origem?.licitacao?.modalidade, b.origem?.licitacao?.processo && 'processo ' + b.origem.licitacao.processo, b.origem?.licitacao?.numero && 'nº ' + b.origem.licitacao.numero].filter(Boolean).join(' · ')],
+          b.origem?.ordemCompra && ['Ordem de compra', b.origem.ordemCompra], b.origem?.af && ['AF (autorização de fornecimento)', b.origem.af], b.nf?.chave && ['Chave da nota', b.nf.chave],
+          ...[['dotacao', 'Dotação'], ['orgao', 'Órgão'], ['unidade', 'Unidade orçamentária'], ['acao', 'Ação'], ['elemento', 'Elemento'], ['vinculo', 'Vínculo']].map(([k, r]) => b.origem?.orcamento?.[k] && [r, b.origem.orcamento[k]])])}
         ${cartao('Detalhes', 'detalhes', [['Marca', b.detalhes?.marca], ['Modelo', b.detalhes?.modelo], ['Cor', b.detalhes?.cor], ['Número de série', b.detalhes?.serie], ['RFID', b.detalhes?.rfid], ['Texto jurídico', [b.detalhes?.textoJuridico?.categoria, b.detalhes?.textoJuridico?.numeroAno].filter(Boolean).join(' · ')]], (b.medidas || []).length ? `<h4>Medidas</h4><dl class="dados">${b.medidas.map((m) => `<dt>${esc(m.nome)}</dt><dd>${esc(m.valor)}</dd>`).join('')}</dl>` : '')}
         ${b.tipo === 'imovel' || b.imovel ? cartao('Imóvel: registro e uso', 'imovel', [['Matrícula', b.imovel?.matricula], ['Cartório', b.imovel?.cartorio], ['Situação do registro', b.imovel?.situacaoRegistro], ['O que impede o registro', b.imovel?.motivoPendencia], ['Classificação de uso', b.imovel?.uso], ['Afetado', b.imovel?.afetado == null ? '' : b.imovel.afetado ? 'Sim' : 'Não'], ['Inscrição imobiliária (IPTU)', b.imovel?.inscricaoIptu], ['Escritura', b.imovel?.escritura], ['Área do terreno', b.imovel?.areaTerreno ? u.inteiro(b.imovel.areaTerreno) + ' m²' : ''], ['Área construída', b.imovel?.areaConstruida ? u.inteiro(b.imovel.areaConstruida) + ' m²' : ''], ['Valor do terreno', b.imovel?.valorTerreno ? u.moeda(b.imovel.valorTerreno) : ''], ['Origem', b.imovel?.origemArea], ['Proprietário na matrícula', b.imovel?.proprietarioMatricula], ['Último registro na matrícula', b.imovel?.ultimoRegistroMatricula ? u.data(b.imovel.ultimoRegistroMatricula) : '']]) + (VP.imoveis ? VP.imoveis.secoesFicha(b) : '') : ''}
         ${b.tipo === 'veiculo' ? cartao('Veículo', 'veiculo', [['Placa', b.veiculo?.placa], ['RENAVAM', b.veiculo?.renavam], ['Chassi', b.veiculo?.chassi], ['Combustível', b.veiculo?.combustivel], ['Ano/modelo', b.veiculo?.anoModelo], ['Tanque (litros)', b.veiculo?.capacidadeTanque], ['Abastecimentos registrados', abast.length ? `${abast.length} · ${u.inteiro(litros)} L · ${u.moeda(abast.reduce((t, e) => t + e.valor, 0))}` : '']]) : ''}
@@ -574,7 +576,7 @@
     const classes = classificacoesDoTipo(tipo).map(caminhoClassificacao).sort((a, b) => a.localeCompare(b, 'pt-BR'));
     return {
       titulo: 'Novo ' + nomeTipo,
-      acoes: `${['imovel', 'infraestrutura'].includes(tipo) && VP.matricula ? '<button class="botao" data-nova-matricula>Cadastrar pela matrícula (PDF)</button> ' : ''}<label class="botao">Importar nota fiscal (XML)<input type="file" accept=".xml,text/xml" data-nfe hidden></label> <label class="botao">Anexar nota fiscal (PDF)<input type="file" accept=".pdf,application/pdf" data-nf-pdf hidden></label> <a class="botao" href="#${tipo === 'veiculo' ? 'frota/veiculos' : 'bens/' + GRUPO_DO_TIPO[tipo]}">Cancelar</a>`,
+      acoes: `${['imovel', 'infraestrutura'].includes(tipo) && VP.matricula ? '<button class="botao" data-nova-matricula>Cadastrar pela matrícula (PDF)</button> ' : ''}<label class="botao">Importar nota fiscal (XML)<input type="file" accept=".xml,text/xml" data-nfe hidden></label> <label class="botao">Importar PDF (nota ou ordem de compra)<input type="file" accept=".pdf,application/pdf" data-nf-pdf hidden></label> <a class="botao" href="#${tipo === 'veiculo' ? 'frota/veiculos' : 'bens/' + GRUPO_DO_TIPO[tipo]}">Cancelar</a>`,
       html: `<form class="cartao form-novo" id="form-novo" autocomplete="off">
           <p class="ajuda">Digite o nome do bem. Se já existir um igual (no catálogo ou em outro bem), o sistema oferece puxar as informações. Vida útil, valor residual e contas vêm da classificação; código e plaqueta são automáticos.</p>
           <div id="nf-pdf-info" class="achado" aria-live="polite"></div>
@@ -646,15 +648,53 @@
           previa();
         });
         f.addEventListener('input', previa);
-        // PDF da nota (DANFE): só anexado, vai junto em cada bem incluído (pelo formulário ou pelo XML)
-        let pdfNota = null;
+        // PDF da nota (DANFE) ou da ordem de compra: o sistema lê, preenche o formulário e abre a conferência dos itens.
+        // Os dois podem ser usados juntos: os valores vêm da nota; ordem de compra, empenho e dotação vêm da ordem de compra.
+        // Cada PDF fica anexado em cada bem incluído.
+        let pdfNota = null, nfLida = null, ocLida = null;
         const mostrarPdf = () => {
           const box = document.getElementById('nf-pdf-info');
-          box.innerHTML = pdfNota ? `<span class="ok-txt">✓ Nota fiscal (PDF): <b>${esc(pdfNota.nome)}</b>. Vai junto em cada bem incluído.</span> <button type="button" class="botao pequeno" data-tirar-pdf>Tirar</button>` : '';
-          box.querySelector('[data-tirar-pdf]')?.addEventListener('click', () => { pdfNota = null; mostrarPdf(); });
+          box.innerHTML = (pdfNota ? `<div><span class="ok-txt">✓ Nota fiscal (PDF): <b>${esc(pdfNota.nome)}</b>${nfLida?.itens.length ? ` · nota ${esc(nfLida.numero)}, ${nfLida.itens.length} item(ns) lido(s)` : ''}. Vai junto em cada bem incluído.</span> <button type="button" class="botao pequeno" data-tirar-pdf="nota">Tirar</button>${nfLida?.itens.length ? ' <button type="button" class="botao pequeno" data-conferir="nota">Conferir itens</button>' : ''}</div>` : '')
+            + (ocLida ? `<div><span class="ok-txt">✓ Ordem de compra (PDF): <b>${esc(ocLida.anexo.nome)}</b> · ${esc(ocLida.numero)}/${esc(ocLida.ano)}, ${ocLida.itens.length} item(ns) lido(s). Vai junto em cada bem incluído.</span> <button type="button" class="botao pequeno" data-tirar-pdf="oc">Tirar</button>${ocLida.itens.length ? ' <button type="button" class="botao pequeno" data-conferir="oc">Conferir itens</button>' : ''}</div>` : '');
+          box.querySelectorAll('[data-tirar-pdf]').forEach((x) => x.addEventListener('click', () => { if (x.dataset.tirarPdf === 'oc') ocLida = null; else { pdfNota = null; nfLida = null; } mostrarPdf(); }));
+          box.querySelectorAll('[data-conferir]').forEach((x) => x.addEventListener('click', () => (x.dataset.conferir === 'oc' ? importarNotaFiscal(ocLida, tipo, pdfNota, ocLida) : importarNotaFiscal(nfLida, tipo, pdfNota, ocLida))));
         };
-        document.querySelector('[data-nf-pdf]').addEventListener('change', async (e) => { const arq = e.target.files[0]; e.target.value = ''; if (!arq) return; try { pdfNota = await lerPdfNota(arq); } catch (err) { return ui.aviso(err.message, 'erro'); } mostrarPdf(); });
-        document.querySelector('[data-nfe]').addEventListener('change', async (e) => { const arq = e.target.files[0]; e.target.value = ''; if (arq) importarNotaFiscal(arq, tipo, pdfNota); });
+        // Preenche o formulário com o que foi lido (um item só: nome, quantidade e valor também)
+        const preencher = (doc) => {
+          const cnpj = String((doc.doOC ? doc.fornecedor.cnpj : doc.emitente.cnpj) || '').replace(/\D/g, '');
+          const forn = cnpj && VP.db.lista('fornecedores').find((x) => String(x.documento || '').replace(/\D/g, '') === cnpj);
+          if (forn) el('fornecedorId').value = forn.id;
+          if (doc.doOC) { if (doc.empenho) el('origem.empenho').value = doc.empenho; }
+          else { if (doc.numero) el('nf.numero').value = doc.numero; if (doc.emissao) el('nf.emissao').value = doc.emissao; }
+          if (doc.itens.length === 1 && !(doc.doOC && nfLida?.itens.length)) {
+            const it = doc.itens[0];
+            el('descricao').value = it.nome; el('quantidade').value = String(Math.max(1, Math.round(it.quantidade)));
+            el('valor').value = String(it.valorUnitario).replace('.', ',');
+            mostrarNome(); previa();
+          }
+        };
+        document.querySelector('[data-nf-pdf]').addEventListener('change', async (e) => {
+          const arq = e.target.files[0]; e.target.value = ''; if (!arq) return;
+          let anexo;
+          try { anexo = await lerPdfNota(arq); } catch (err) { return ui.aviso(err.message, 'erro'); }
+          if (!VP.notaPdf) { pdfNota = anexo; return mostrarPdf(); }
+          ui.aviso('Lendo o PDF…');
+          let lido;
+          try { lido = await VP.notaPdf.lerDocumento(arq); } catch (err) { pdfNota = anexo; mostrarPdf(); return ui.aviso(`Não foi possível ler este PDF (${err.message}). Ele fica anexado como nota fiscal; preencha os dados.`, 'erro'); }
+          if (lido.oc) {
+            ocLida = Object.assign(lido.oc, { anexo });
+            mostrarPdf(); preencher(ocLida);
+            if (nfLida?.itens.length) importarNotaFiscal(nfLida, tipo, pdfNota, ocLida);
+            else if (ocLida.itens.length) importarNotaFiscal(ocLida, tipo, pdfNota, ocLida);
+            else ui.aviso(`Não deu para ler os itens desta ordem de compra: ${ocLida.avisos.join(' ')}`, 'erro');
+            return;
+          }
+          pdfNota = anexo; nfLida = lido.nf;
+          mostrarPdf(); preencher(nfLida);
+          if (nfLida.itens.length) importarNotaFiscal(nfLida, tipo, pdfNota, ocLida);
+          else ui.aviso(`Não deu para ler os itens deste PDF: ${nfLida.avisos.join(' ')} Ele fica anexado; preencha os dados.`, 'erro');
+        });
+        document.querySelector('[data-nfe]').addEventListener('change', async (e) => { const arq = e.target.files[0]; e.target.value = ''; if (arq) importarNotaFiscal(arq, tipo, pdfNota, ocLida); });
         f.addEventListener('submit', async (e) => {
           e.preventDefault();
           const erro = f.querySelector('.erro-form');
@@ -675,10 +715,10 @@
           if (cfg.obrigaContas && !dadosPrevistos(textoCl, paiId, tipo).contaId) { erro.textContent = 'Esta classificação não tem conta contábil. Escolha em "Fica dentro de" uma classe com conta, ou ajuste em Cadastros → Classificações.'; return; }
           const cad = await garantirCadastros({ tipo, nome: v.descricao, classificacaoTexto: textoCl, paiId });
           let criados;
-          try { criados = await VP.criarBens(Object.assign({}, v, { produtoId: cad.produto.id, classificacaoId: cad.classificacao.id, tipo, quantidade: Math.max(1, Math.floor(v.quantidade || 1)), pdfNota })); } catch (err) { erro.textContent = err.message; return; }
+          try { criados = await VP.criarBens(Object.assign({}, v, { produtoId: cad.produto.id, classificacaoId: cad.classificacao.id, tipo, quantidade: Math.max(1, Math.floor(v.quantidade || 1)), pdfNota, pdfOC: ocLida?.anexo, origem: Object.assign({}, v.origem, origemDaOC(ocLida)) })); } catch (err) { erro.textContent = err.message; return; }
           if (VP.termos) await VP.termos.abrir(criados, 'novo bem');
           if (ultimaAnalise && VP.classificador) await VP.classificador.registrarDecisoes([{ descricao: v.descricao, escolha: 'patrimonio', valor: v.valor, sugerido: ultimaAnalise.sugestao }]);
-          ui.resultado({ titulo: 'Bens incluídos', sucesso: criados.map((b) => `${b.codigo} · plaqueta ${b.plaqueta} · ${b.descricao}`).concat(cad.criados, pdfNota ? [`Nota fiscal (PDF) anexada em cada bem: ${pdfNota.nome}`] : []) });
+          ui.resultado({ titulo: 'Bens incluídos', sucesso: criados.map((b) => `${b.codigo} · plaqueta ${b.plaqueta} · ${b.descricao}`).concat(cad.criados, pdfNota ? [`Nota fiscal (PDF) anexada em cada bem: ${pdfNota.nome}`] : [], ocLida ? [`Ordem de compra ${ocLida.numero}/${ocLida.ano} (PDF) anexada em cada bem`] : []) });
           VP.estado.listaAtual = criados.map((b) => b.id);
           VP.app.ir('#bem/' + criados[0].id);
         });
@@ -704,18 +744,27 @@
       emitente: { cnpj: tag(emit, 'CNPJ') || tag(emit, 'CPF'), nome: tag(emit, 'xNome') }, itens
     };
   };
-  // PDF da nota fiscal (DANFE): o sistema não lê, só anexa. Cada bem recebe a sua cópia, com o tipo "Nota fiscal".
+  // PDF da nota fiscal (DANFE): anexado em cada bem (tipo "Nota fiscal"); a leitura dos dados fica em nota-pdf.js.
   const lerPdfNota = async (arq) => {
     if (!/pdf$/i.test(arq.type || '') && !/\.pdf$/i.test(arq.name || '')) throw new Error('Escolha o arquivo PDF da nota fiscal.');
     const lim = VP.anexos?.LIMITE_MB || 10;
     if (arq.size > lim * 1048576) throw new Error(`O PDF passa de ${lim} MB. Reduza antes de anexar.`);
     return (await ui.lerArquivos([arq]))[0];
   };
-  const copiaNota = (a) => Object.assign({}, a, { id: u.id(), tipoAnexo: 'Nota fiscal' });
-  const importarNotaFiscal = async (arquivo, tipo, pdf = null) => {
-    let nf;
-    try { nf = VP.lerNFe(await arquivo.text()); } catch (e) { return ui.aviso(e.message, 'erro'); }
-    if (!nf.itens.length) return ui.aviso('A nota não tem itens.', 'erro');
+  const copiaNota = (a, tipoAnexo = 'Nota fiscal') => Object.assign({}, a, { id: u.id(), tipoAnexo });
+  // Dados da ordem de compra que vão para a origem do bem (como vêm no documento, sem converter)
+  const origemDaOC = (oc) => (oc ? { ordemCompra: `${oc.numero}/${oc.ano}`, orcamento: oc.orcamento, finalidade: oc.finalidade } : {});
+  const entidadeDoCnpj = (cnpj) => { const d = String(cnpj || '').replace(/\D/g, ''); return d ? VP.db.lista('entidades').find((x) => String(x.documento || x.cnpj || '').replace(/\D/g, '') === d) : null; };
+  // fonte: o arquivo XML, ou a nota já lida do PDF (VP.notaPdf, mesmo formato)
+  // oc: ordem de compra lida do PDF (opcional). Com nota, os valores vêm da nota; sem nota, os itens vêm da ordem de compra.
+  const importarNotaFiscal = async (fonte, tipo, pdf = null, oc = null) => {
+    let nf = fonte.doPDF ? fonte : null;
+    if (fonte.doOC) nf = { numero: '', serie: '', emissao: fonte.data, chave: '', emitente: { cnpj: fonte.fornecedor.cnpj, nome: fonte.fornecedor.nome }, itens: fonte.itens, avisos: fonte.avisos, doOC: true };
+    if (!nf) try { nf = VP.lerNFe(await fonte.text()); } catch (e) { return ui.aviso(e.message, 'erro'); }
+    if (!nf.itens.length) return ui.aviso(nf.doOC ? 'A ordem de compra não tem itens.' : 'A nota não tem itens.', 'erro');
+    const avisosOC = [];
+    if (oc && !nf.doOC && oc.fornecedor.cnpj && nf.emitente.cnpj && oc.fornecedor.cnpj.replace(/\D/g, '') !== nf.emitente.cnpj.replace(/\D/g, '')) avisosOC.push(`O fornecedor da ordem de compra ${oc.numero}/${oc.ano} (${oc.fornecedor.nome}) é diferente do da nota (${nf.emitente.nome || nf.emitente.cnpj}). Confira se são da mesma compra.`);
+    const entidade = oc ? entidadeDoCnpj(oc.entidadeCnpj) : null;
     const cnpj = nf.emitente.cnpj.replace(/\D/g, '');
     const fornecedor = VP.db.lista('fornecedores').find((x) => String(x.documento || '').replace(/\D/g, '') === cnpj && cnpj);
     const classes = classificacoesDoTipo(tipo).map(caminhoClassificacao).sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -736,13 +785,15 @@
     });
     const nSugControle = linhas.filter((l) => l.an?.sugestao === 'controle').length;
     const corpo = `
-      <p><b>Nota ${esc(nf.numero)}${nf.serie ? '/' + esc(nf.serie) : ''}</b> · ${esc(nf.emitente.nome)} (${esc(nf.emitente.cnpj)}) · emitida em ${u.data(nf.emissao)} · ${nf.itens.length} item(ns)</p>
+      <p>${nf.doOC ? `<b>Ordem de compra ${esc(oc.numero)}/${esc(oc.ano)}</b> · ${esc(nf.emitente.nome)} (${esc(nf.emitente.cnpj)}) · de ${u.data(nf.emissao)}` : `<b>Nota ${esc(nf.numero)}${nf.serie ? '/' + esc(nf.serie) : ''}</b> · ${esc(nf.emitente.nome)} (${esc(nf.emitente.cnpj)}) · emitida em ${u.data(nf.emissao)}${nf.af ? ` · AF ${esc(nf.af)}` : ''}`} · ${nf.itens.length} item(ns)</p>
+      ${nf.doPDF || nf.doOC ? `<p class="aviso-inline"><b>Dados lidos do PDF ${nf.doOC ? 'da ordem de compra' : 'da nota'}.</b> Confira cada item com o PDF antes de incluir.${nf.avisos.concat(avisosOC).length ? '<br>' + nf.avisos.concat(avisosOC).map(esc).join('<br>') : ''}</p>` : avisosOC.length ? `<p class="aviso-inline">${avisosOC.map(esc).join('<br>')}</p>` : ''}
+      ${oc ? `<div class="ajuda" id="dados-oc"><b>Da ordem de compra ${esc(oc.numero)}/${esc(oc.ano)}</b> (vai para a origem de cada bem): ${[['Empenho', oc.empenho], ['Dotação', oc.orcamento.dotacao], ['Órgão', oc.orcamento.orgao], ['Unidade orçamentária', oc.orcamento.unidade], ['Ação', oc.orcamento.acao], ['Elemento', oc.orcamento.elemento], ['Vínculo', oc.orcamento.vinculo], ['Entidade', entidade?.nome]].filter(([, x]) => x).map(([k, x]) => `${k}: ${esc(x)}`).join(' · ')}</div>` : ''}
       ${fornecedor ? '' : '<p class="aviso-inline">Fornecedor ainda não cadastrado: será incluído em Cadastros → Fornecedores.</p>'}
       <div class="form-grade">${ui.campos([
         { chave: 'unidadeId', rotulo: 'Unidade que recebe', tipo: 'select', opcoes: opc('unidades'), largura: 'meia' },
         { chave: 'estado', rotulo: 'Estado', tipo: 'select', opcoes: Object.entries(L.estados).reverse(), padrao: 8, vazio: false, largura: 'meia' },
-        { chave: 'empenho', rotulo: 'Empenho (ano/número)', largura: 'meia' }, { chave: 'dataIncorporacao', rotulo: 'Data de incorporação', tipo: 'data', padrao: VP.Plataforma.hoje(), largura: 'meia' },
-        { chave: 'recebidoPor', rotulo: 'Recebido por (quem conferiu e recebeu)', largura: 'meia' }].concat(pdf ? [] : [{ chave: 'pdfNota', rotulo: 'PDF da nota fiscal (opcional): vai junto em cada bem', tipo: 'arquivo', aceita: '.pdf,application/pdf', largura: 'meia' }]))}</div>
+        { chave: 'empenho', rotulo: 'Empenho (ano/número)', largura: 'meia', padrao: oc?.empenho || '' }, { chave: 'dataIncorporacao', rotulo: 'Data de incorporação', tipo: 'data', padrao: VP.Plataforma.hoje(), largura: 'meia' },
+        { chave: 'recebidoPor', rotulo: 'Recebido por (quem conferiu e recebeu)', largura: 'meia' }].concat(pdf || nf.doOC ? [] : [{ chave: 'pdfNota', rotulo: 'PDF da nota fiscal (opcional): vai junto em cada bem', tipo: 'arquivo', aceita: '.pdf,application/pdf', largura: 'meia' }]))}</div>
       ${pdf ? `<p class="ajuda">Nota fiscal (PDF): <b>${esc(pdf.nome)}</b>. Vai junto em cada bem e item de controle incluído.</p>` : ''}
       ${nSugControle ? `<p class="aviso-inline" id="aviso-sug-controle"><b>${nSugControle} de ${linhas.length} item(ns)</b> foram sugeridos como <b>item de controle</b> (sem plaqueta, fora do balancete): custam até ${u.moeda(VP.config().limiteControle)} e duram até ${VP.config().limiteControleMeses} meses. Confira em cada item o campo "Vai para" e mude se precisar.</p>` : ''}
       <p class="ajuda">Os dados da nota valem. Quando um item já existe no cadastro e alguma informação mudou, ela aparece em destaque: confira e escolha, em cada uma, se fica a da nota ou a anterior.</p>
@@ -763,7 +814,7 @@
       <p class="erro-form" role="alert"></p>`;
     // item de controle não precisa de classificação: os campos somem quando "Vai para" é item de controle
     setTimeout(() => document.querySelectorAll('.item-nf [data-destino]').forEach((el) => el.addEventListener('change', () => el.closest('.item-nf').classList.toggle('vai-controle', el.value === 'controle'))), 0);
-    ui.modal({ titulo: 'Conferir itens da nota fiscal', largura: 'grande', corpo, botoes: [{ texto: 'Cancelar' }, { texto: 'Incluir bens', classe: 'primario', fecha: false, acao: async (d, fechar) => {
+    ui.modal({ titulo: nf.doOC ? 'Conferir itens da ordem de compra' : 'Conferir itens da nota fiscal', largura: 'grande', corpo, botoes: [{ texto: 'Cancelar' }, { texto: 'Incluir bens', classe: 'primario', fecha: false, acao: async (d, fechar) => {
       const geral = ui.lerCampos(d, [{ chave: 'unidadeId' }, { chave: 'estado' }, { chave: 'empenho' }, { chave: 'dataIncorporacao' }, { chave: 'recebidoPor' }]).valores;
       const escolhidos = linhas.map((l, i) => ({ l, box: d.querySelector(`.item-nf[data-i="${i}"]`) })).filter((x) => x.box.querySelector('[data-incluir]').checked);
       if (!escolhidos.length) { d.querySelector('.erro-form').textContent = 'Marque pelo menos um item.'; return false; }
@@ -780,12 +831,15 @@
       let forn = fornecedor;
       const sucesso = [], falhas = [], avisos = [];
       if (pdfN) avisos.push(`Nota fiscal (PDF) anexada em cada bem e item de controle: ${pdfN.nome}`);
-      if (!forn) { forn = { id: u.id(), nome: nf.emitente.nome, documento: nf.emitente.cnpj, criadoPelaNota: true }; await VP.db.gravar('fornecedores', forn); avisos.push(`Fornecedor "${forn.nome}" incluído nos Cadastros.`); }
+      if (oc) avisos.push(`Ordem de compra ${oc.numero}/${oc.ano}${oc.anexo ? ' (PDF)' : ''} ligada a cada bem${oc.anexo ? ' e anexada' : ''}.`);
+      const nfDoBem = nf.doOC ? {} : { numero: nf.numero, serie: nf.serie, emissao: nf.emissao, chave: nf.chave, af: nf.af || '' };
+      if (!forn) { forn = { id: u.id(), nome: nf.emitente.nome || `Fornecedor CNPJ ${nf.emitente.cnpj}`, documento: nf.emitente.cnpj, criadoPelaNota: true }; await VP.db.gravar('fornecedores', forn); avisos.push(`Fornecedor "${forn.nome}" incluído nos Cadastros.`); }
       // Itens de controle: sem plaqueta, sem classificação, fora do balancete
       if (paraControle.length) {
         let n = Number(VP.controle.proximoCodigo().replace(/\D/g, ''));
-        const itensC = paraControle.map(({ l }) => VP.controle.montar({ descricao: l.it.nome, quantidade: Math.max(1, Math.round(l.it.quantidade)), valorUnitario: l.it.valorUnitario, unidadeId: geral.unidadeId, dataEntrada: geral.dataIncorporacao || nf.emissao, estado: Number(geral.estado || 8), fornecedorId: forn.id, nf: { numero: nf.numero, serie: nf.serie, emissao: nf.emissao, chave: nf.chave }, vidaUtilAnos: l.an?.vidaUtilMeses ? Math.round(l.an.vidaUtilMeses / 12 * 10) / 10 : null }, 'C-' + String(n++).padStart(6, '0'), `Incluído pela nota fiscal ${nf.numero} (item ${l.it.n})`));
+        const itensC = paraControle.map(({ l }) => VP.controle.montar({ descricao: l.it.nome, quantidade: Math.max(1, Math.round(l.it.quantidade)), valorUnitario: l.it.valorUnitario, unidadeId: geral.unidadeId, dataEntrada: geral.dataIncorporacao || nf.emissao, estado: Number(geral.estado || 8), fornecedorId: forn.id, nf: nfDoBem, vidaUtilAnos: l.an?.vidaUtilMeses ? Math.round(l.an.vidaUtilMeses / 12 * 10) / 10 : null }, 'C-' + String(n++).padStart(6, '0'), nf.doOC ? `Incluído pela ordem de compra ${oc.numero}/${oc.ano} (item ${l.it.n})` : `Incluído pela nota fiscal ${nf.numero} (item ${l.it.n})`));
         if (pdfN) itensC.forEach((x) => x.anexos.push(copiaNota(pdfN)));
+        if (oc?.anexo) itensC.forEach((x) => x.anexos.push(copiaNota(oc.anexo, 'Ordem de compra')));
         await VP.db.gravar('bensControle', itensC);
         for (const x of itensC) sucesso.push(`Item de controle ${x.codigo} · ${x.descricao} (${u.inteiro(x.quantidade)} un., sem plaqueta)`);
       }
@@ -800,18 +854,19 @@
         const qtd = Math.max(1, Math.round(l.it.quantidade));
         try {
           const criados = await VP.criarBens({ descricao: l.it.nome, produtoId: cad.produto.id, classificacaoId: cad.classificacao.id, tipo, unidadeId: geral.unidadeId, dataAquisicao: nf.emissao || VP.Plataforma.hoje(), dataIncorporacao: geral.dataIncorporacao, valor, quantidade: qtd, situacaoAquisicao: 'Compra', fornecedorId, estado: geral.estado || 8,
-            nf: { numero: nf.numero, serie: nf.serie, emissao: nf.emissao, chave: nf.chave }, origem: { empenho: geral.empenho || '' }, detalhes: l.ant ? { marca: l.ant.marca, modelo: l.ant.modelo } : {}, origemTexto: `NF ${nf.numero} item ${l.it.n}`, pdfNota: pdfN });
+            nf: nfDoBem, origem: Object.assign({ empenho: geral.empenho || '' }, origemDaOC(oc), nf.af ? { af: nf.af } : {}), entidadeId: entidade?.id, detalhes: l.ant ? { marca: l.ant.marca, modelo: l.ant.modelo } : {}, origemTexto: nf.doOC ? `ordem de compra ${oc.numero}/${oc.ano} item ${l.it.n}` : `NF ${nf.numero} item ${l.it.n}`, pdfNota: pdfN, pdfOC: oc?.anexo });
           todosCriados.push(...criados);
           sucesso.push(`${l.it.nome}: ${criados.length} bem(ns), códigos ${criados[0].codigo}${criados.length > 1 ? ' a ' + criados[criados.length - 1].codigo : ''}${l.difs.length ? ' (diferenças conferidas)' : ''}`);
         } catch (e) { falhas.push({ item: l.it.nome, motivo: e.message }); }
       }
       if (todosCriados.length && geral.recebidoPor) {
-        const evs = todosCriados.map((b) => { b.recebimento = { por: geral.recebidoPor, data: geral.dataIncorporacao || VP.Plataforma.hoje(), documento: `NF ${nf.numero}` }; return VP.novoEvento(b.id, 'recebimento', { data: b.recebimento.data, descricao: `Recebido por ${geral.recebidoPor} · NF ${nf.numero}`, extra: { recebidoPor: geral.recebidoPor, documento: `NF ${nf.numero}` } }); });
+        const docRec = nf.doOC ? `Ordem de compra ${oc.numero}/${oc.ano}` : `NF ${nf.numero}`;
+        const evs = todosCriados.map((b) => { b.recebimento = { por: geral.recebidoPor, data: geral.dataIncorporacao || VP.Plataforma.hoje(), documento: docRec }; return VP.novoEvento(b.id, 'recebimento', { data: b.recebimento.data, descricao: `Recebido por ${geral.recebidoPor} · ${docRec}`, extra: { recebidoPor: geral.recebidoPor, documento: docRec } }); });
         await VP.db.gravarVarias({ bens: todosCriados, eventos: evs });
       }
       if (todosCriados.length && VP.termos) { const tt = await VP.termos.abrir(todosCriados, 'nota fiscal'); if (tt.length) avisos.push(`${tt.length} termo(s) de responsabilidade aguardando assinatura (prazo ${VP.termos.prazoDias()} dias) — menu Termos.`); }
       fechar();
-      ui.resultado({ titulo: `Nota ${nf.numero}: ${paraControle.length ? 'bens e itens de controle incluídos' : 'bens incluídos'}`, sucesso: sucesso.concat(avisos), falhas });
+      ui.resultado({ titulo: `${nf.doOC ? `Ordem de compra ${oc.numero}/${oc.ano}` : `Nota ${nf.numero}`}: ${paraControle.length ? 'bens e itens de controle incluídos' : 'bens incluídos'}`, sucesso: sucesso.concat(avisos), falhas });
       VP.app.ir('#bens/' + (GRUPO_DO_TIPO[tipo] === 'frota' ? 'moveis' : GRUPO_DO_TIPO[tipo]));
     } }] });
   };
@@ -820,6 +875,7 @@
   VP.criarBens = async (v) => {
     const { bens, eventos } = VP.montarBens(v);
     if (v.pdfNota) for (const b of bens) b.anexos.push(copiaNota(v.pdfNota));
+    if (v.pdfOC) for (const b of bens) b.anexos.push(copiaNota(v.pdfOC, 'Ordem de compra'));
     await VP.db.gravarVarias({ bens, eventos });
     return bens;
   };

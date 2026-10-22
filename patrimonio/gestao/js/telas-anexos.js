@@ -7,7 +7,7 @@
   const u = VP.u, esc = u.esc, ui = VP.ui, L = VP.LISTAS;
   const X = VP.anexos = {};
   const pode = () => !VP.servidor?.ativo || VP.servidor.podeAlterar();
-  X.TIPOS = ['Foto', 'Nota fiscal', 'Termo de responsabilidade assinado', 'Laudo', 'Contrato', 'Matrícula', 'Outro'];
+  X.TIPOS = ['Foto', 'Nota fiscal', 'Ordem de compra', 'Termo de responsabilidade assinado', 'Laudo', 'Contrato', 'Matrícula', 'Outro'];
   X.LIMITE_MB = 10;
 
   // ------------------------------------------------------------------ nomes

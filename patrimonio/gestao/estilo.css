@@ -235,7 +235,7 @@ a.numero-destaque:hover { border-color: var(--primaria); }
 
 /* formulários */
 .form-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
-.campo { display: grid; gap: 4px; grid-column: 1 / -1; }
+.campo { display: grid; gap: 4px; grid-column: 1 / -1; align-content: start; } /* sem esticar a caixa quando o campo do lado tem explicação longa */
 .campo.meia { grid-column: auto; }
 @media (max-width: 600px) { .campo.meia { grid-column: 1 / -1; } }
 .campo label { font-weight: 600; font-size: 13.5px; }

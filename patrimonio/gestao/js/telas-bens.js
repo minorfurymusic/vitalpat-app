@@ -555,6 +555,8 @@
     const campos = [
       { chave: 'unidadeId', rotulo: 'Unidade', tipo: 'select', opcoes: opc('unidades'), obrigatorio: cfg.obrigaUnidade, largura: 'meia', ajuda: faltaCadastro('unidades', 'local (unidade)', 'Unidades') },
       { chave: 'responsavelId', rotulo: 'Responsável (vem da unidade)', tipo: 'select', opcoes: opc('responsaveis'), largura: 'meia', ajuda: faltaCadastro('responsaveis', 'responsável', 'Responsáveis') },
+      // dono do bem: a prefeitura ou um fundo. Vem da unidade; com uma entidade só, já vem marcada
+      { chave: 'entidadeId', rotulo: 'Entidade (dona do bem: prefeitura ou fundo)', tipo: 'select', opcoes: opc('entidades'), largura: 'meia', padrao: VP.db.lista('entidades').length === 1 ? VP.db.lista('entidades')[0].id : '', ajuda: VP.db.lista('entidades').length ? 'Vem da unidade. Em nome de quem o bem foi comprado.' : 'Nenhuma entidade cadastrada. Cadastre a prefeitura e cada fundo em Cadastros → Entidades e fundos (nome e CNPJ).' },
       { chave: 'dataAquisicao', rotulo: 'Data de aquisição', tipo: 'data', obrigatorio: true, largura: 'meia', padrao: VP.Plataforma.hoje() },
       { chave: 'valor', rotulo: 'Valor de aquisição (R$)', tipo: 'moeda', obrigatorio: true, largura: 'meia' },
       // Valor residual sempre informado, em % ou R$ (decisão do usuário, 14/10/2026): vem da classificação e pode ser ajustado
@@ -644,7 +646,7 @@
         el('classificacaoTexto').addEventListener('input', () => { mostrarClasse(); previa(); });
         ['residual', 'residualTipo'].forEach((k) => el(k).addEventListener('input', () => { el('residual').dataset.mexido = '1'; }));
         f.addEventListener('change', (e) => {
-          if (e.target.name === 'unidadeId') { const un = VP.db.pega('unidades', e.target.value); if (un?.responsavelId) el('responsavelId').value = un.responsavelId; }
+          if (e.target.name === 'unidadeId') { const un = VP.db.pega('unidades', e.target.value); if (un?.responsavelId) el('responsavelId').value = un.responsavelId; if (un?.entidadeId) el('entidadeId').value = un.entidadeId; }
           previa();
         });
         f.addEventListener('input', previa);
@@ -899,7 +901,7 @@
         descricao: v.descricao, complemento: v.complemento || v.descricao, produtoId: v.produtoId || '', classificacaoId: v.classificacaoId,
         unidadeId: v.unidadeId || '', localizacao: v.localizacao || '', responsavelId: v.responsavelId || unidade?.responsavelId || '', responsaveisAdicionais: [],
         dataAquisicao: v.dataAquisicao, dataIncorporacao: v.dataIncorporacao || VP.Plataforma.hoje(), situacaoAquisicao: v.situacaoAquisicao || 'Compra',
-        comissaoId: '', exerciciosAnteriores: false, entidadeId: v.entidadeId || 'E1', fornecedorId: v.fornecedorId || '', contaId: dc.contaId || '',
+        comissaoId: '', exerciciosAnteriores: false, entidadeId: v.entidadeId || VP.db.pega('unidades', v.unidadeId)?.entidadeId || (VP.db.lista('entidades').length === 1 ? VP.db.lista('entidades')[0].id : VP.db.pega('entidades', 'E1') ? 'E1' : ''), fornecedorId: v.fornecedorId || '', contaId: dc.contaId || '',
         origem: Object.assign({ quantidade: v.quantidade || 1, valorUnitario: v.valor }, v.origem || {}), nf: v.nf || {},
         detalhes: Object.assign({ tombamento: cfg.tombamentoAutomatico ? String(codigo) : '', dataTombamento: cfg.tombamentoAutomatico ? VP.Plataforma.hoje() : '', textoJuridico: {} }, v.detalhes || {}, i > 0 ? { serie: '' } : {}),
         endereco: null, medidas: [], veiculo: v.tipo === 'veiculo' || dc.tipoBem === 'veiculo' || grupo?.tipoBem === 'veiculo' ? {} : null, seguro: null, garantia: null, fotos: [], anexos: [], criticidade: 2,

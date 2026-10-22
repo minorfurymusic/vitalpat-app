@@ -288,9 +288,9 @@
     const pend = P.pendCad = {};
     if (VP.importaCadastros) { VP.importaCadastros.limparPendentes(); itens.push(...VP.importaCadastros.previa(s.abas.filter((x) => x.usar && ehCad(x.cj)), pend)); }
     if (VP.importaUnidades) {
-      pend.unidades = new Map(); let n = 0;
+      pend.unidades = pend.unidades || new Map(); let n = 0; // a aba Unidades da Planilha Unificada já pode ter posto unidades novas aqui
       for (const a of s.abas.filter((x) => x.usar && x.cj === 'unidades')) for (const it of VP.importaUnidades.previa(a)) {
-        if (it.classe === 'novo') { it.tempId = `__cad:unidades:${++n}`; pend.unidades.set(u.normalizar(it.valores.codigo).trim(), it.tempId); pend.unidades.set(norm(it.valores.nome), it.tempId); }
+        if (it.classe === 'novo') { it.tempId = `__cad:unidadesCC:${++n}`; pend.unidades.set(u.normalizar(it.valores.codigo).trim(), it.tempId); pend.unidades.set(norm(it.valores.nome), it.tempId); }
         itens.push(it);
       }
     }
@@ -404,7 +404,7 @@
     }
     if (VP.importaCadastros) {
       const grava = VP.importaCadastros.aplicar(marcados.filter((x) => ehCad(x.cj)), reg, mapaCad, sucesso, falhas);
-      if (extra.unidades?.length) { grava.unidades = extra.unidades; extra.unidades = []; }
+      if (extra.unidades?.length) { grava.unidades = (grava.unidades || []).concat(extra.unidades); extra.unidades = []; }
       if (Object.keys(grava).length) await VP.db.gravarVarias(grava);
     }
     // referências dos bens a cadastros novos: id de verdade (vazio se a linha do cadastro foi desmarcada)
@@ -599,16 +599,16 @@
           <div class="linha-botoes"><label>Salvar esta escolha como modelo (opcional) <input data-exp-nome-modelo placeholder="Ex.: Para o sistema da contabilidade"></label></div>
           <p><button class="botao primario" data-exportar ${qtd ? '' : 'disabled'}>Baixar Excel</button></p>
         </section>
-        ${VP.importaCadastros ? `<section class="cartao" id="exp-cadastros"><h3>Cadastros (uma aba para cada)</h3>
-          <p class="ajuda">Entidades, unidades, contas, responsáveis, fornecedores, motivos, comissões, seguradoras, tipos de garantia, classificações, produtos e compras. As colunas são as mesmas da importação: dá para corrigir no Excel e importar de volta, ou usar como modelo para os dados da prefeitura.</p>
-          <p><button class="botao primario" data-exp-cadastros>Baixar cadastros (Excel)</button></p></section>` : ''}
+        ${VP.importaCadastros ? `<section class="cartao" id="exp-cadastros"><h3>Planilha Unificada (todos os cadastros, uma aba para cada)</h3>
+          <p class="ajuda">Unidades (com tipo, responsável, entidade e endereço), entidades, contas, responsáveis, fornecedores, motivos, comissões, seguradoras, tipos de garantia, classificações, produtos, vida útil dos itens, decisões guardadas e compras. As colunas são as mesmas da importação e da tela Cadastros: dá para corrigir no Excel e importar de volta (aqui ou em Cadastros → Importar planilha unificada), ou usar como modelo para os dados da prefeitura.</p>
+          <p><button class="botao primario" data-exp-cadastros>Baixar Planilha Unificada</button></p></section>` : ''}
         <section class="cartao"><h3>Outras listas</h3><p class="ajuda">Cada lista abaixo tem o botão <b>Baixar planilha</b> na própria tela (Excel, CSV ou JSON, com escolha das colunas). Se marcar linhas na lista, só elas saem.</p>
           <div class="grade-links">${P.OUTRAS.map(([g, l]) => `<div><h4>${esc(g)}</h4><ul class="lista-simples">${l.map(([h, n]) => `<li><a href="${h}">${esc(n)}</a></li>`).join('')}</ul></div>`).join('')}</div>
         </section>`,
       ligar() {
         const re = () => VP.app.render();
         document.querySelector('[data-modelo-imp]').addEventListener('click', P.baixarModelo);
-        document.querySelector('[data-exp-cadastros]')?.addEventListener('click', () => { const n = VP.importaCadastros.exportar(); ui.aviso(`Planilha de cadastros baixada (${u.inteiro(n)} registro(s)).`); });
+        document.querySelector('[data-exp-cadastros]')?.addEventListener('click', () => { const n = VP.importaCadastros.exportar(); ui.aviso(`Planilha Unificada baixada (${u.inteiro(n)} registro(s)).`); });
         document.querySelectorAll('[data-exp]').forEach((el) => el.addEventListener('change', () => { f[el.dataset.exp] = el.type === 'checkbox' ? el.checked : el.value; re(); }));
         const caixas = () => [...document.querySelectorAll('#exp-colunas input')];
         document.querySelector('[data-exp-todas]').addEventListener('click', () => caixas().forEach((i) => { i.checked = true; }));

@@ -45,6 +45,7 @@
   const norm = (s) => u.normalizar(String(s || '')).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   K.norm = norm;
   const idDecisao = (nome) => 'n:' + norm(nome).slice(0, 120);
+  K.idDecisao = idDecisao;
 
   // Grava a lista inicial uma vez (depois ela é só da pessoa: editar, incluir, mandar para a Lixeira)
   K.garantirLista = async ({ gravar = true } = {}) => {

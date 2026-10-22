@@ -148,6 +148,7 @@
       const qtd = await VP.converterEscalaEstados({ gravar: podeGravar });
       await VP.corrigirAClassificar({ gravar: podeGravar });
       await VP.classificador.garantirLista({ gravar: podeGravar });
+      if (VP.garantirContasPadrao) await VP.garantirContasPadrao({ gravar: podeGravar }); // lista inicial de contas contábeis (sistema novo)
       if (qtd && (qtd.bens || qtd.bensControle) && VP.db.pega('meta', 'escalaEstados')) setTimeout(() => VP.ui.aviso(`Estado de conservação passou para a escala nova (8 níveis): ${VP.u.inteiro(qtd.bens + qtd.bensControle)} registro(s) convertidos. O valor antigo ficou guardado.`), 800);
     } catch (e) {
       carregando.innerHTML = VP.servidor.ativo

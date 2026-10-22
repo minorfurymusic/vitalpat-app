@@ -1,6 +1,8 @@
 /* VitalPat Patrimônio · Gestão — importar e exportar os CADASTROS por planilha (uma aba para cada).
    Entidades, contas, responsáveis, fornecedores, motivos, comissões, seguradoras, tipos de garantia, classificações,
-   produtos e compras (itens a incorporar). Unidades continuam em importa-unidades.js (só código e nome).
+   produtos e compras (itens a incorporar). Desde 22/10/2026 também Unidades (com todos os campos da tela), Vida útil dos itens
+   e Decisões guardadas: é a "Planilha Unificada" da tela Cadastros. O relatório de centros de custo do sistema atual (com nomes
+   de servidores) continua em importa-unidades.js, que lê só código e nome.
    Usado junto com Exportar e importar → Importar: mesma prévia, mesmo "Salvar" e mesmo "Desfazer" dos bens.
    O que já existe (mesmo nome, código ou CNPJ) não é duplicado: aparece como "Igual" ou "Alterado".
    Um bem da mesma planilha pode usar um cadastro novo da planilha (ex.: unidade, classificação ou fornecedor novos). */
@@ -31,6 +33,12 @@
       { k: 'nome', t: 'Nome', obrig: true }, { k: 'matricula', t: 'Matrícula' }, { k: 'cargo', t: 'Cargo' },
       { k: 'documento', t: 'CPF', apelidos: ['cpf do responsavel'] }, { k: 'email', t: 'E-mail', apelidos: ['email'] }],
       chaves: (x) => [x.matricula ? 'mat:' + norm(x.matricula) : '', norm(x.nome)] },
+    unidades: { aba: 'Unidades', titulo: 'Unidade', campos: [
+      { k: 'codigo', t: 'Código', obrig: true, apelidos: ['codigo da unidade', 'centro de custo'] }, { k: 'nome', t: 'Nome', obrig: true, apelidos: ['nome da unidade', 'descricao'] },
+      { k: 'tipo', t: 'Tipo', tipo: 'opcao', opcoes: () => (VP.TIPOS_UNIDADE || []).map((x) => [x, x]) },
+      { k: 'responsavelId', t: 'Responsável', tipo: 'ref', ref: 'responsaveis' }, { k: 'entidadeId', t: 'Entidade / órgão', tipo: 'ref', ref: 'entidades', apelidos: ['entidade', 'orgao'] },
+      { k: 'logradouro', t: 'Logradouro', apelidos: ['endereco', 'rua'] }, { k: 'bairro', t: 'Bairro' }, { k: 'cidade', t: 'Cidade', apelidos: ['municipio'] }],
+      chaves: (x) => [norm(x.codigo)], chavesBusca: (x) => [norm(x.nome)], aoCriar: (x) => { x.historicoNomes = []; } },
     fornecedores: { aba: 'Fornecedores', titulo: 'Fornecedor', campos: [
       { k: 'nome', t: 'Nome', obrig: true, apelidos: ['razao social'] }, { k: 'documento', t: 'CNPJ/CPF', apelidos: ['cnpj', 'cpf'] }, { k: 'contato', t: 'Contato' }],
       chaves: (x) => [digitos(x.documento).length >= 11 ? 'doc:' + digitos(x.documento) : '', norm(x.nome)] },
@@ -57,6 +65,14 @@
       { k: 'codigo', t: 'Código' }, { k: 'nome', t: 'Nome', obrig: true },
       { k: 'classificacaoId', t: 'Classificação', tipo: 'ref', ref: 'classificacoes', obrig: true }],
       chaves: (x) => [norm(x.nome)] },
+    vidaUtilItens: { aba: 'Vida útil dos itens', titulo: 'Vida útil do item', campos: [
+      { k: 'nome', t: 'Item', obrig: true }, { k: 'termos', t: 'Palavras', apelidos: ['palavras que identificam o item'] }, { k: 'vidaUtilMeses', t: 'Vida útil (meses)', tipo: 'numero', obrig: true }],
+      chaves: (x) => [norm(x.nome)] },
+    decisoesItens: { aba: 'Decisões guardadas', titulo: 'Decisão guardada', campos: [
+      { k: 'nome', t: 'Item', obrig: true }, { k: 'escolha', t: 'Decisão', tipo: 'opcao', obrig: true, opcoes: [['controle', 'Item de controle'], ['patrimonio', 'Patrimônio (plaqueta)']] }],
+      chaves: (x) => [norm(x.nome)],
+      // mesmo código que o classificador usa para achar a decisão pelo nome do item
+      novoId: (x) => (VP.classificador?.idDecisao ? VP.classificador.idDecisao(x.nome) : u.id()), aoCriar: (x) => { x.vezes = { controle: 0, patrimonio: 0 }; x.ultimaEm = VP.Plataforma.hoje(); } },
     itensIncorporar: { aba: 'Compras', titulo: 'Compra', campos: [
       { k: 'entidadeId', t: 'Entidade', tipo: 'ref', ref: 'entidades', ajuda: 'Vazio = a única entidade cadastrada' },
       { k: 'oc', t: 'Ordem de compra', apelidos: ['ordem de compra numero ano', 'oc'] }, { k: 'empenho', t: 'Empenho', apelidos: ['empenho numero ano'] },
@@ -68,7 +84,7 @@
       chaves: (x) => [norm([x.entidadeId, x.ordemCompra?.numero, x.ordemCompra?.ano, x.empenho?.numero, x.empenho?.ano, x.fornecedorId, x.produtoId].join('|'))] }
   };
   // ordem de gravação: quem é usado por outro vem antes
-  C.ORDEM = ['entidades', 'contas', 'responsaveis', 'fornecedores', 'motivos', 'comissoes', 'seguradoras', 'tiposGarantia', 'classificacoes', 'produtos', 'itensIncorporar'];
+  C.ORDEM = ['entidades', 'contas', 'responsaveis', 'unidades', 'fornecedores', 'motivos', 'comissoes', 'seguradoras', 'tiposGarantia', 'classificacoes', 'produtos', 'vidaUtilItens', 'decisoesItens', 'itensIncorporar'];
   C.cj = (tabela) => 'cad:' + tabela;
   C.tabela = (cj) => String(cj).slice(4);
   C.ehCadastro = (cj) => String(cj).startsWith('cad:');
@@ -174,7 +190,11 @@
             // chave repetida no mesmo arquivo: a segunda linha é erro
             const ks = def.chaves(doc).filter(Boolean);
             if (ks.some((k) => pend[tabela].has(k))) { it.classe = 'erro'; it.erros.push('Repetido nesta planilha'); }
-            else { it.tempId = `__cad:${tabela}:${++seq}`; for (const k of ks) pend[tabela].set(k, it.tempId); pendentes.set(it.tempId, Object.assign({ id: it.tempId }, doc)); }
+            else {
+              it.tempId = `__cad:${tabela}:${++seq}`; for (const k of ks) pend[tabela].set(k, it.tempId); pendentes.set(it.tempId, Object.assign({ id: it.tempId }, doc));
+              // outros textos que acham o registro novo (ex.: a unidade pelo nome, na aba de bens), sem contar como repetido
+              if (def.chavesBusca) for (const k of def.chavesBusca(doc)) if (k && !pend[tabela].has(k)) pend[tabela].set(k, it.tempId);
+            }
           }
           it.marcado = it.classe === 'novo' || it.classe === 'alterado';
           itens.push(it);
@@ -212,7 +232,8 @@
           }
           for (const k of Object.keys(v)) if (k.startsWith('_') || (tabela === 'itensIncorporar' && ['oc', 'emissao'].includes(k))) delete v[k];
           if (it.classe === 'novo') {
-            const x = Object.assign({ id: u.id() }, v);
+            const x = Object.assign({ id: C.DEF[tabela].novoId ? C.DEF[tabela].novoId(v) : u.id() }, v);
+            if (C.DEF[tabela].aoCriar) C.DEF[tabela].aoCriar(x);
             if (tabela === 'itensIncorporar') Object.assign(x, { ativo: true, incorporados: 0, unidadeMedida: 'UN', liquidado: !!v.liquidado, descricao: VP.nome('produtos', x.produtoId) || pendentes.get([...mapa.entries()].find(([, id]) => id === x.produtoId)?.[0])?.nome || '' });
             if (tabela === 'contas' && !x.tipo) x.tipo = 'ativo';
             if (tabela === 'classificacoes' && x.naoDeprecia == null) x.naoDeprecia = false;
@@ -238,7 +259,7 @@
   // Desfazer: os novos vão para a Lixeira (se ninguém usa) e os alterados voltam ao valor anterior
   const emUso = (tabela, id) => {
     if (tabela === 'itensIncorporar') return (VP.db.pega(tabela, id)?.incorporados || 0) > 0;
-    const campo = { entidades: 'entidadeId', responsaveis: 'responsavelId', fornecedores: 'fornecedorId', classificacoes: 'classificacaoId', produtos: 'produtoId', contas: 'contaId' }[tabela];
+    const campo = { unidades: 'unidadeId', entidades: 'entidadeId', responsaveis: 'responsavelId', fornecedores: 'fornecedorId', classificacoes: 'classificacaoId', produtos: 'produtoId', contas: 'contaId' }[tabela];
     return !!campo && VP.db.lista('bens').some((b) => b[campo] === id);
   };
   C.desfazer = (reg, grava, sucesso, falhas) => {
@@ -271,15 +292,16 @@
   };
   C.abasExportar = () => {
     const abas = [];
-    if (VP.importaUnidades) abas.push({ nome: 'Unidades', cabecalho: ['Código', 'Nome'], linhas: VP.db.lista('unidades').sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })).map((x) => [x.codigo, x.nome]) });
     for (const t of C.ORDEM) {
       const def = C.DEF[t];
       let lista = VP.db.lista(t);
       if (t === 'classificacoes') { const r = []; const desce = (pai) => lista.filter((c) => (c.paiId || '') === pai).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach((c) => { r.push(c); desce(c.id); }); desce(''); lista = r; }
       if (t === 'itensIncorporar') lista = lista.filter((x) => x.ativo !== false);
+      if (t === 'unidades') lista = lista.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
+      if (t === 'vidaUtilItens' || t === 'decisoesItens') lista = lista.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
       abas.push({ nome: def.aba, cabecalho: def.campos.map((c) => c.t), linhas: lista.map((x) => def.campos.map((c) => mostrar(c, x[c.k], x))) });
     }
     return abas;
   };
-  C.exportar = () => { const abas = C.abasExportar(); VP.baixarXLSX('cadastros-vitalpat', abas); return abas.reduce((n, a) => n + a.linhas.length, 0); };
+  C.exportar = () => { const abas = C.abasExportar(); VP.baixarXLSX('Planilha Unificada', abas); return abas.reduce((n, a) => n + a.linhas.length, 0); };
 })();

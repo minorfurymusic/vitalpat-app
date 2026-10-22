@@ -5,40 +5,99 @@
   const u = VP.u, esc = u.esc, ui = VP.ui, G = VP.graficos, L = VP.LISTAS;
   const T = VP.telas;
   const opc = (...a) => VP.opc(...a);
+  VP.TIPOS_UNIDADE = ['Administrativo', 'Escola', 'Saúde', 'Garagem', 'Assistência social', 'Cultura e esporte', 'Outro'];
+  // Aviso embaixo de um campo de lista quando o cadastro de onde ela vem está vazio: diz o nome do cadastro, onde fica e o que preencher
+  const seVazio = (col, texto, filtro) => (VP.db.lista(col).filter(filtro || (() => true)).length ? '' : texto);
+
+  // ---------------------------------------------------------------- contas contábeis
+  // Lista inicial (sugestão do sistema, no padrão do plano de contas nacional do setor público): carregada uma vez,
+  // quando o cadastro de contas está vazio. A contabilidade confere e ajusta. [A conferir] códigos e nomes.
+  VP.CONTAS_PADRAO = [
+    ['1.2.3.1.1.01', 'Máquinas, aparelhos, equipamentos e ferramentas', 'ativo'], ['1.2.3.1.1.02', 'Bens de informática', 'ativo'],
+    ['1.2.3.1.1.03', 'Móveis e utensílios', 'ativo'], ['1.2.3.1.1.04', 'Materiais culturais, educacionais e de comunicação', 'ativo'],
+    ['1.2.3.1.1.05', 'Veículos', 'ativo'], ['1.2.3.1.1.06', 'Peças e conjuntos de reposição', 'ativo'], ['1.2.3.1.1.07', 'Bens móveis em andamento', 'ativo'],
+    ['1.2.3.1.1.09', 'Armamentos', 'ativo'], ['1.2.3.1.1.10', 'Semoventes', 'ativo'], ['1.2.3.1.1.99', 'Demais bens móveis', 'ativo'],
+    ['1.2.3.2.1.01', 'Bens de uso especial (imóveis)', 'ativo'], ['1.2.3.2.1.02', 'Bens dominicais (imóveis)', 'ativo'], ['1.2.3.2.1.03', 'Bens de uso comum do povo (infraestrutura)', 'ativo'],
+    ['1.2.3.2.1.04', 'Bens imóveis em andamento', 'ativo'], ['1.2.3.2.1.05', 'Instalações', 'ativo'], ['1.2.3.2.1.06', 'Benfeitorias em propriedade de terceiros', 'ativo'], ['1.2.3.2.1.99', 'Demais bens imóveis', 'ativo'],
+    ['1.2.4.1.1.01', 'Softwares', 'ativo'], ['1.2.4.1.1.02', 'Marcas, direitos e patentes', 'ativo'], ['1.2.4.1.1.03', 'Direito de uso de imóveis', 'ativo'],
+    ['1.2.3.8.1.01', '(-) Depreciação acumulada de bens móveis', 'depreciacao'], ['1.2.3.8.1.02', '(-) Depreciação acumulada de bens imóveis', 'depreciacao'],
+    ['1.2.4.8.1.01', '(-) Amortização acumulada de intangíveis', 'depreciacao'],
+    ['3.3.3.1.1.01', 'Depreciação de bens móveis (despesa do mês)', 'resultado'], ['3.3.3.1.1.02', 'Depreciação de bens imóveis (despesa do mês)', 'resultado'],
+    ['3.3.3.2.1.01', 'Amortização de intangíveis (despesa do mês)', 'resultado']
+  ];
+  VP.garantirContasPadrao = async ({ gravar = true } = {}) => {
+    if (VP.db.pega('meta', 'contasPadrao') || VP.db.lista('contas', true).length) return 0;
+    const docs = VP.CONTAS_PADRAO.map(([codigo, nome, tipo], i) => ({ id: 'CP' + String(i + 1).padStart(3, '0'), codigo, nome, tipo, origem: 'Lista inicial do sistema' }));
+    if (!gravar) { for (const d of docs) VP.db.dados.contas.set(d.id, d); return docs.length; }
+    await VP.db.gravarVarias({ contas: docs, meta: [{ id: 'contasPadrao', criadoEm: VP.Plataforma.agoraISO(), quantidade: docs.length }] });
+    return docs.length;
+  };
+  const TIPOS_CONTA = { ativo: 'Ativo (valor do bem)', depreciacao: 'Depreciação acumulada (desgaste somado)', resultado: 'Resultado (despesa do mês)' };
+  const rotuloConta = (c) => `${c.codigo ? c.codigo + ' · ' : ''}${c.nome}`;
+  // Conta digitada na Classificação: acha na lista ou devolve a conta nova a criar (código no começo, depois o nome)
+  VP.contaDoTexto = (texto, tipo) => {
+    const t = String(texto || '').replace(/\s+/g, ' ').trim();
+    if (!t) return { id: '' };
+    const n = u.normalizar(t);
+    const todas = VP.db.lista('contas');
+    const achada = todas.find((c) => u.normalizar(rotuloConta(c)) === n) || todas.find((c) => c.codigo && u.normalizar(c.codigo) === n) || todas.find((c) => u.normalizar(c.nome) === n);
+    if (achada) return achada.tipo === tipo ? { id: achada.id } : { erro: `A conta "${rotuloConta(achada)}" é do tipo ${TIPOS_CONTA[achada.tipo] || achada.tipo}, não ${TIPOS_CONTA[tipo]}.` };
+    const m = t.match(/^(\d[\d.]*)\s*(?:[·:\-–]\s*)?(.*)$/);
+    const codigo = m ? m[1].replace(/\.$/, '') : '', nome = (m ? m[2] : t).trim();
+    if (!nome) return { erro: `Escreva também o nome da conta ${codigo} (ex.: ${codigo} Móveis e utensílios).` };
+    return { nova: { id: u.id(), codigo, nome, tipo, origem: 'Criada ao salvar uma classificação' } };
+  };
 
   // ---------------------------------------------------------------- definição de cada cadastro
   const CAD = {
     unidades: { titulo: 'Unidades (centros de custo e localizações)', campos: () => [
       { chave: 'codigo', rotulo: 'Código', obrigatorio: true, largura: 'meia', ajuda: VP.config().codigoLocalizacaoManual ? 'Informado manualmente (configuração).' : '' }, { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' },
-      { chave: 'tipo', rotulo: 'Tipo', tipo: 'select', opcoes: ['Administrativo', 'Escola', 'Saúde', 'Garagem', 'Assistência social', 'Cultura e esporte', 'Outro'].map((x) => [x, x]), largura: 'meia' },
-      { chave: 'responsavelId', rotulo: 'Responsável', tipo: 'select', opcoes: opc('responsaveis'), largura: 'meia' },
-      { chave: 'entidadeId', rotulo: 'Entidade / órgão', tipo: 'select', opcoes: opc('entidades') },
+      { chave: 'tipo', rotulo: 'Tipo', tipo: 'select', opcoes: VP.TIPOS_UNIDADE.map((x) => [x, x]), largura: 'meia' },
+      { chave: 'responsavelId', rotulo: 'Responsável', tipo: 'select', opcoes: opc('responsaveis'), largura: 'meia', ajuda: seVazio('responsaveis', 'Nenhum responsável cadastrado. Cadastre a pessoa em Cadastros → Responsáveis (nome, matrícula, cargo).') },
+      { chave: 'entidadeId', rotulo: 'Entidade / órgão (dono dos bens desta unidade)', tipo: 'select', opcoes: opc('entidades'), ajuda: 'A prefeitura ou o fundo (Saúde, Educação, Previdência…) em nome de quem os bens são comprados.' + (seVazio('entidades', ' Nenhuma cadastrada: cadastre em Cadastros → Entidades e fundos (nome e CNPJ).') || '') },
       { chave: 'logradouro', rotulo: 'Logradouro' }, { chave: 'bairro', rotulo: 'Bairro', largura: 'meia' }, { chave: 'cidade', rotulo: 'Cidade', largura: 'meia' }],
     colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'nome', titulo: 'Nome', html: (x) => `<a href="#unidade/${esc(x.id)}">${esc(x.nome)}</a>`, valor: (x) => x.nome }, { chave: 'tipo', titulo: 'Tipo' }, { chave: 'resp', titulo: 'Responsável', valor: (x) => VP.nome('responsaveis', x.responsavelId) }, { chave: 'bens', titulo: 'Bens', num: true, valor: (x) => VP.db.lista('bens').filter((b) => b.unidadeId === x.id && b.status !== 'baixado').length }, { chave: 'bairro', titulo: 'Bairro' }], uso: (x) => VP.db.lista('bens').filter((b) => b.unidadeId === x.id).length },
     responsaveis: { titulo: 'Responsáveis', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'matricula', rotulo: 'Matrícula', largura: 'meia' }, { chave: 'cargo', rotulo: 'Cargo', largura: 'meia' }, { chave: 'documento', rotulo: 'CPF (fica mascarado nas telas)', largura: 'meia' }, { chave: 'email', rotulo: 'E-mail', largura: 'meia' }],
       colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'cargo', titulo: 'Cargo' }, { chave: 'doc', titulo: 'CPF', valor: (x) => (x.documento ? '***.' + String(x.documento).replace(/\D/g, '').slice(3, 6) + '.***-**' : '') }, { chave: 'bens', titulo: 'Bens', num: true, valor: (x) => VP.db.lista('bens').filter((b) => b.responsavelId === x.id && b.status !== 'baixado').length }], uso: (x) => VP.db.lista('bens').filter((b) => b.responsavelId === x.id).length },
     classificacoes: { titulo: 'Classificações (grupo, classe, subclasse)', campos: () => [
       { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' }, { chave: 'codigo', rotulo: 'Código', largura: 'meia' },
-      { chave: 'paiId', rotulo: 'Fica dentro de (vazio = grupo)', tipo: 'select', opcoes: VP.opcClassificacoes() },
+      { chave: 'paiId', rotulo: 'Fica dentro de (vazio = grupo)', tipo: 'select', opcoes: VP.opcClassificacoes(), ajuda: seVazio('classificacoes', 'Ainda não há classificações: deixe vazio e esta será um grupo (ex.: Bens móveis). Depois, as classes (ex.: Cadeiras) ficam dentro dele.') || 'Vazio = esta é um grupo (ex.: Bens móveis). Para uma classe, escolha o grupo.' },
       { chave: 'tipoBem', rotulo: 'Tipo de bem (para grupos)', tipo: 'select', opcoes: Object.entries(L.tiposBem), largura: 'meia' },
-      { chave: 'contaId', rotulo: 'Conta contábil', tipo: 'select', opcoes: opc('contas', (c) => c.tipo === 'ativo'), largura: 'meia' },
-      { chave: 'contaDepreciacaoId', rotulo: 'Conta de depreciação acumulada', tipo: 'select', opcoes: opc('contas', (c) => c.tipo === 'depreciacao') },
+      { chave: 'contaTexto', rotulo: 'Conta contábil (onde fica o valor do bem)', largura: 'meia', sugestoes: VP.db.lista('contas').filter((c) => c.tipo === 'ativo').map(rotuloConta), placeholder: 'Digite para procurar', ajuda: (seVazio('contas', 'Nenhuma conta do tipo Ativo. ', (c) => c.tipo === 'ativo') || '') + 'Escolha da lista ou digite código e nome (ex.: 1.2.3.1.1.03 Móveis e utensílios). Se não existir, é criada em Cadastros → Contas contábeis ao salvar. O código vem do plano de contas da contabilidade.' },
+      { chave: 'contaDepTexto', rotulo: 'Conta de depreciação acumulada', largura: 'meia', sugestoes: VP.db.lista('contas').filter((c) => c.tipo === 'depreciacao').map(rotuloConta), placeholder: 'Digite para procurar', ajuda: (seVazio('contas', 'Nenhuma conta do tipo Depreciação acumulada. ', (c) => c.tipo === 'depreciacao') || '') + 'Onde soma o desgaste (ex.: 1.2.3.8.1.01 (-) Depreciação acumulada de bens móveis). Se não existir, é criada ao salvar.' },
       { chave: 'vidaUtilMeses', rotulo: 'Vida útil (meses)', tipo: 'numero', largura: 'meia', ajuda: 'Use a tabela oficial do município (decreto). Se a classe não tiver, vale a do grupo.' },
-      { chave: 'residualPct', rotulo: 'Valor residual (%)', tipo: 'numero', largura: 'meia' },
+      { chave: 'residualPct', rotulo: 'Valor residual (%)', tipo: 'numero', largura: 'meia', ajuda: 'Quanto o bem ainda vale no fim da vida útil, em % do valor (de 0 a 99).' },
       { chave: 'naoDeprecia', rotulo: 'Não deprecia (ex.: terrenos)', tipo: 'bool' }],
     colunas: [{ chave: 'nome', titulo: 'Nome', valor: (x) => `${'— '.repeat(x.nivel === 'grupo' ? 0 : x.nivel === 'classe' ? 1 : 2)}${x.nome}` }, { chave: 'nivel', titulo: 'Nível' }, { chave: 'conta', titulo: 'Conta', valor: (x) => VP.nome('contas', VP.dadosDaClassificacao(x.id).contaId) }, { chave: 'vida', titulo: 'Vida útil', valor: (x) => { const d = VP.dadosDaClassificacao(x.id); return d.naoDeprecia ? 'Não deprecia' : d.vidaUtilMeses ? `${d.vidaUtilMeses} meses` : '—'; } }, { chave: 'res', titulo: 'Residual', valor: (x) => (VP.dadosDaClassificacao(x.id).residualPct ?? '—') + '%' }],
     ordenar: (lista) => { const r = []; const desce = (pai) => lista.filter((c) => (c.paiId || '') === pai).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach((c) => { r.push(c); desce(c.id); }); desce(''); return r; },
     antesDeSalvar: (x) => { const pai = VP.db.pega('classificacoes', x.paiId); x.nivel = !pai ? 'grupo' : pai.paiId ? 'subclasse' : 'classe'; },
+    // contas digitadas: acha ou cria (a conta nova só é gravada se a classificação for salva)
+    valoresDe: (x) => (x ? Object.assign({}, x, { contaTexto: x.contaId ? rotuloConta(VP.db.pega('contas', x.contaId) || { nome: '' }) : '', contaDepTexto: x.contaDepreciacaoId ? rotuloConta(VP.db.pega('contas', x.contaDepreciacaoId) || { nome: '' }) : '' }) : {}),
+    preparar: (v) => {
+      const novas = [];
+      for (const [txt, campo, tipo] of [['contaTexto', 'contaId', 'ativo'], ['contaDepTexto', 'contaDepreciacaoId', 'depreciacao']]) {
+        if (!(txt in v)) continue;
+        const r = VP.contaDoTexto(v[txt], tipo);
+        if (r.erro) return { erro: r.erro };
+        if (r.nova) { const ja = novas.find((n) => n.codigo === r.nova.codigo && n.nome === r.nova.nome); v[campo] = (ja || r.nova).id; if (!ja) novas.push(r.nova); } else v[campo] = r.id;
+        delete v[txt];
+      }
+      return { novas };
+    },
     uso: (x) => VP.db.lista('bens').filter((b) => VP.subClassificacoes(x.id).has(b.classificacaoId)).length },
-    produtos: { titulo: 'Produtos (catálogo)', campos: () => [{ chave: 'codigo', rotulo: 'Código', largura: 'meia' }, { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' }, { chave: 'classificacaoId', rotulo: 'Classificação', tipo: 'select', opcoes: VP.opcClassificacoes(), obrigatorio: true }],
+    produtos: { titulo: 'Produtos (catálogo)', campos: () => [{ chave: 'codigo', rotulo: 'Código', largura: 'meia' }, { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' }, { chave: 'classificacaoId', rotulo: 'Classificação', tipo: 'select', opcoes: VP.opcClassificacoes(), obrigatorio: true, ajuda: seVazio('classificacoes', 'Nenhuma classificação cadastrada. Cadastre em Cadastros → Classificações (grupo, classe, vida útil e valor residual).') }],
       colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'nome', titulo: 'Nome' }, { chave: 'cl', titulo: 'Classificação', valor: (x) => VP.nome('classificacoes', x.classificacaoId) }], uso: (x) => VP.db.lista('bens').filter((b) => b.produtoId === x.id).length },
-    contas: { titulo: 'Contas contábeis', campos: () => [{ chave: 'codigo', rotulo: 'Código', obrigatorio: true, largura: 'meia' }, { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' }, { chave: 'tipo', rotulo: 'Tipo', tipo: 'select', vazio: false, opcoes: [['ativo', 'Ativo (bens)'], ['depreciacao', 'Depreciação/amortização acumulada'], ['resultado', 'Resultado (despesa)']] }],
-      colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'nome', titulo: 'Nome' }, { chave: 'tipo', titulo: 'Tipo' }], uso: (x) => VP.db.lista('bens').filter((b) => b.contaId === x.id).length },
+    contas: { titulo: 'Contas contábeis',
+      intro: () => '<p class="ajuda"><b>O que é:</b> a "gaveta" da contabilidade onde fica cada tipo de bem (ex.: Móveis e utensílios, Veículos, Edificações). É a <b>mesma lista para a prefeitura e para todos os fundos</b>: quem é dono do bem é a <a href="#cadastros/entidades">Entidade</a>, não a conta. A conta é escolhida na <a href="#cadastros/classificacoes">Classificação</a> e vale para todos os bens dela. <b>Tipo:</b> Ativo = onde fica o valor do bem; Depreciação acumulada = onde soma o desgaste; Resultado = a despesa do mês com o desgaste. A lista inicial é uma sugestão do sistema no padrão nacional: confira os códigos com a contabilidade.</p>',
+      campos: () => [{ chave: 'codigo', rotulo: 'Código (do plano de contas da contabilidade)', obrigatorio: true, largura: 'meia' }, { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' }, { chave: 'tipo', rotulo: 'Tipo', tipo: 'select', vazio: false, opcoes: Object.entries(TIPOS_CONTA) }],
+      colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'nome', titulo: 'Nome' }, { chave: 'tipo', titulo: 'Tipo', valor: (x) => TIPOS_CONTA[x.tipo] || x.tipo }, { chave: 'origem', titulo: 'Origem', valor: (x) => x.origem || 'Incluída pela pessoa' }], uso: (x) => VP.db.lista('bens').filter((b) => b.contaId === x.id).length },
     fornecedores: { titulo: 'Fornecedores', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'documento', rotulo: 'CNPJ/CPF', largura: 'meia' }, { chave: 'contato', rotulo: 'Contato', largura: 'meia' }],
       colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'documento', titulo: 'CNPJ/CPF' }, { chave: 'contato', titulo: 'Contato' }], uso: (x) => VP.db.lista('bens').filter((b) => b.fornecedorId === x.id).length },
     motivos: { titulo: 'Motivos', campos: () => [{ chave: 'tipo', rotulo: 'Usado em', tipo: 'select', vazio: false, opcoes: [['baixa', 'Baixa'], ['desuso', 'Desuso'], ['manutencao', 'Manutenção'], ['transferencia', 'Transferência']] }, { chave: 'nome', rotulo: 'Motivo', obrigatorio: true }],
       colunas: [{ chave: 'tipo', titulo: 'Usado em' }, { chave: 'nome', titulo: 'Motivo' }] },
-    entidades: { titulo: 'Entidades e fundos', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'documento', rotulo: 'CNPJ' }], colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'documento', titulo: 'CNPJ' }], uso: (x) => VP.db.lista('bens').filter((b) => b.entidadeId === x.id).length },
+    entidades: { titulo: 'Entidades e fundos',
+      intro: () => '<p class="ajuda"><b>O que é:</b> quem é <b>dono</b> dos bens: a prefeitura e cada fundo com CNPJ próprio (ex.: Prefeitura Municipal, Fundo Municipal de Saúde, de Educação, de Previdência, de Cultura). Cada unidade e cada bem ficam em nome de uma entidade, e os relatórios separam por ela. Não confunda com as <a href="#cadastros/contas">Contas contábeis</a>, que dizem o tipo do bem e são as mesmas para todas as entidades.</p>',
+      campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'documento', rotulo: 'CNPJ' }], colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'documento', titulo: 'CNPJ' }], uso: (x) => VP.db.lista('bens').filter((b) => b.entidadeId === x.id).length },
     comissoes: { titulo: 'Comissões (inventário e avaliação)', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'ato', rotulo: 'Ato de designação (portaria/decreto)' }, { chave: 'membros', rotulo: 'Membros (pelo menos 3 servidores)', tipo: 'area' }],
       colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'ato', titulo: 'Ato' }, { chave: 'membros', titulo: 'Membros' }] },
     seguradoras: { titulo: 'Seguradoras e corretoras', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'corretora', rotulo: 'É corretora', tipo: 'bool' }], colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'corretora', titulo: 'Tipo', valor: (x) => (x.corretora ? 'Corretora' : 'Seguradora') }] },
@@ -68,28 +127,37 @@
     let lista = VP.db.lista(qual);
     lista = c.ordenar ? c.ordenar(lista) : lista.sort((a, b) => String(a.codigo || a.nome).localeCompare(String(b.codigo || b.nome), 'pt-BR', { numeric: true }));
     const editar = (x) => ui.formulario({
-      titulo: (x ? 'Editar: ' : 'Novo: ') + c.titulo.split(' (')[0], campos: c.campos(), valores: x || {}, largura: 'media',
+      titulo: (x ? 'Editar: ' : 'Novo: ') + c.titulo.split(' (')[0], campos: c.campos(), valores: c.valoresDe ? c.valoresDe(x) : x || {}, largura: 'media',
       salvar: async (v) => {
+        const prep = c.preparar ? c.preparar(v) : { novas: [] };
+        if (prep.erro) return prep.erro;
         const doc = Object.assign(x || {}, v);
         if (c.antesDeSalvar) c.antesDeSalvar(doc);
         if (qual === 'unidades' && VP.db.lista('unidades').some((o) => o.codigo === doc.codigo && o.id !== doc.id)) return 'Já existe unidade com este código.';
         // Valor residual sempre informado (decisão do usuário, 14/10/2026): quem tem vida útil precisa do residual, próprio ou do grupo
         if (qual === 'classificacoes' && !doc.naoDeprecia && doc.vidaUtilMeses && (doc.residualPct == null || doc.residualPct === '') && VP.dadosDaClassificacao(doc.paiId).residualPct == null) return 'Informe o Valor residual (%): toda classificação que deprecia precisa dele.';
         if (qual === 'classificacoes' && doc.residualPct != null && doc.residualPct !== '' && (doc.residualPct < 0 || doc.residualPct >= 100)) return 'O valor residual (%) deve ser de 0 a 99.';
+        if (prep.novas.length) await VP.db.gravar('contas', prep.novas);
         await VP.db.gravar(qual, doc);
-        ui.aviso('Salvo.');
+        ui.aviso(prep.novas.length ? `Salvo. Conta(s) nova(s) em Contas contábeis: ${prep.novas.map(rotuloConta).join('; ')}.` : 'Salvo.');
         VP.app.render();
       }
     });
     return {
       titulo: 'Cadastros',
-      acoes: `${VP.importaCadastros ? '<button class="botao" data-baixar-todos-cad>Baixar todas as planilhas</button> ' : ''}<button class="botao primario" data-novo-cad>+ Novo</button>`,
+      acoes: `${VP.importaCadastros ? `${!VP.servidor?.ativo || VP.servidor.podeAlterar() ? '<label class="botao">Importar planilha unificada<input type="file" accept=".xlsx,.csv" data-importar-cad hidden></label> ' : ''}<button class="botao" data-baixar-todos-cad>Baixar planilha unificada</button> ` : ''}<button class="botao primario" data-novo-cad>+ Novo</button>`,
       html: nav + (c.intro ? c.intro() : '') + ui.tabela({ id: 'cad-' + qual, colunas: c.colunas.concat([{ chave: '_acoes', titulo: '', html: (x) => `<button class="botao pequeno" data-editar-cad="${esc(x.id)}">Editar</button> <button class="botao pequeno perigo" data-excluir-cad="${esc(x.id)}">Excluir</button>` }]), linhas: lista, nomePlanilha: qual }),
       ligar() {
         ui.ligarTabela('cad-' + qual);
         document.querySelector('[data-novo-cad]').addEventListener('click', () => editar(null));
         // Todos os cadastros num Excel só, uma aba para cada (o mesmo de Exportar e importar → Cadastros)
-        document.querySelector('[data-baixar-todos-cad]')?.addEventListener('click', () => { const n = VP.importaCadastros.exportar(); ui.aviso(`Planilha de cadastros baixada (${u.inteiro(n)} registro(s)).`); });
+        document.querySelector('[data-baixar-todos-cad]')?.addEventListener('click', () => { const n = VP.importaCadastros.exportar(); ui.aviso(`Planilha Unificada baixada (${u.inteiro(n)} registro(s)).`); });
+        // Importar a Planilha Unificada aqui: lê o arquivo e abre a mesma prévia de Exportar e importar (nada é gravado antes de confirmar)
+        document.querySelector('[data-importar-cad]')?.addEventListener('change', async (e) => {
+          const arq = e.target.files[0]; e.target.value = ''; if (!arq) return;
+          try { await VP.planilhas.lerArquivo(arq); } catch (err) { return ui.aviso(err.message, 'erro'); }
+          VP.app.ir('#planilhas/importar');
+        });
         document.getElementById('conteudo').onclick = async (e) => { // onclick: não acumula a cada visita
           const ed = e.target.closest('[data-editar-cad]');
           if (ed) return editar(VP.db.pega(qual, ed.dataset.editarCad));

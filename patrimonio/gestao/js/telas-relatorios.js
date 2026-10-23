@@ -286,16 +286,31 @@
       };
     }
   };
-  R.imoveis = {
+  R.imoveis = { oculto: true, // aparece em Relatórios → Imóveis (aba Demonstrativo), junto do painel e das fotos
+    semDados: 'Os imóveis entram pela planilha (aba Imóveis) ou em Bens imóveis → Novo bem.',
     grupo: 'Prestação de contas (TCE/SC)', titulo: 'Demonstrativo dos imóveis', descricao: 'Localização, situação do registro e valor; lista dos imóveis sem registro e o que impede a regularização (IN TC-20/2015, Anexo V).',
     filtros: ['unidadeId', 'bairro', 'logradouro', 'entidadeId'],
     gerar(f) {
       const bens = bensDoFiltro(Object.assign({}, f, { tipo: 'imovel' }));
       const sit = (b) => b.imovel?.situacaoRegistro || 'Não informado';
+      const valor = (b) => VP.saldo(b).liquido;
+      const cedido = (b) => (VP.imoveis ? VP.imoveis.cessoesDe(b.id).some((c) => VP.imoveis.cessaoAtiva(c) && c.direcao === 'a-terceiros') : false);
+      const porSit = [...new Set(bens.map(sit))].map((s) => ({ s, l: bens.filter((b) => sit(b) === s) }));
       return {
-        resumo: [G.numero('Imóveis', u.inteiro(bens.length)), G.numero('Valor', u.moedaCurta(bens.reduce((t, b) => t + VP.saldo(b).liquido, 0))), G.numero('Sem registro ou em regularização', u.inteiro(bens.filter((b) => sit(b) !== 'Registrado').length))],
+        resumo: [G.numero('Imóveis', u.inteiro(bens.length), u.moeda(bens.reduce((t, b) => t + valor(b), 0)))].concat(porSit.map((g) => G.numero(g.s, u.inteiro(g.l.length), u.moeda(g.l.reduce((t, b) => t + valor(b), 0))))),
         graficos: [{ titulo: 'Situação do registro', html: G.barrasH([...u.agruparSoma(bens, sit)].map(([k, n]) => ({ rotulo: k, valor: n }))) }, { titulo: 'Classificação de uso', html: G.barrasH([...u.agruparSoma(bens, (b) => b.imovel?.uso || 'Não informado')].map(([k, n]) => ({ rotulo: k, valor: n }))) }],
-        tabela: { linhas: bens, colunas: [bemCol, { chave: 'end', titulo: 'Localização', valor: (b) => [b.endereco?.logradouro, b.endereco?.bairro].filter(Boolean).join(', ') }, { chave: 'mat', titulo: 'Matrícula', valor: (b) => b.imovel?.matricula }, { chave: 'sit', titulo: 'Situação do registro', valor: sit }, { chave: 'uso', titulo: 'Uso', valor: (b) => b.imovel?.uso }, { chave: 'area', titulo: 'Área construída (m²)', valor: (b) => b.medidas?.find((m) => /constru/i.test(m.nome))?.valor || '' }, { chave: 'valor', titulo: 'Valor', num: true, soma: true, formato: u.moeda, valor: (b) => VP.saldo(b).liquido }] }
+        nota: 'IN TC-20/2015, Anexo V: localização, situação e valor; para os não registrados, o que impede a regularização.',
+        tabela: { linhas: bens, colunas: [bemCol,
+          { chave: 'end', titulo: 'Localização', valor: (b) => [b.endereco?.logradouro, b.endereco?.bairro, b.endereco?.cidade].filter(Boolean).join(', ') },
+          { chave: 'unidade', titulo: 'Unidade', valor: (b) => VP.nome('unidades', b.unidadeId), oculta: true },
+          { chave: 'mat', titulo: 'Matrícula', valor: (b) => b.imovel?.matricula },
+          { chave: 'sit', titulo: 'Situação do registro', valor: sit },
+          { chave: 'motivo', titulo: 'O que impede o registro', valor: (b) => b.imovel?.motivoPendencia || '' },
+          { chave: 'uso', titulo: 'Uso', valor: (b) => b.imovel?.uso },
+          { chave: 'terreno', titulo: 'Terreno (m²)', num: true, valor: (b) => Number(b.imovel?.areaTerreno) || '', formato: (v) => (v ? u.inteiro(v) : '') },
+          { chave: 'area', titulo: 'Construída (m²)', num: true, valor: (b) => Number(b.imovel?.areaConstruida) || Number(b.medidas?.find((m) => /constru/i.test(m.nome))?.valor) || '', formato: (v) => (v ? u.inteiro(v) : ''), oculta: true },
+          { chave: 'cedido', titulo: 'Cedido a terceiros', valor: (b) => (cedido(b) ? 'Sim' : 'Não'), oculta: true },
+          { chave: 'valor', titulo: 'Valor', num: true, soma: true, formato: u.moeda, valor }] }
       };
     }
   };
@@ -324,14 +339,13 @@
 
   // ---------------------------------------------------------------- galeria
   T.relatorios = () => {
-    const todos = Object.entries(R).map(([k, r]) => [k, r]).concat(Object.entries(ESPECIAIS));
+    const todos = Object.entries(R).filter(([, r]) => !r.oculto).concat(Object.entries(ESPECIAIS));
     const grupos = [...new Set(todos.map(([, r]) => r.grupo))];
     return {
       titulo: 'Relatórios',
       html: `<p class="ajuda">Todos os relatórios abrem na hora, com números, gráficos e tabela. Em cada um: <b>Imprimir / PDF</b> e <b>Baixar planilha</b> (escolhendo as colunas).</p>
-        <h3>Painéis (visão geral, com gráficos e filtros)</h3><div class="galeria galeria-paineis"><a class="cartao-relatorio painel-destaque" href="#agualuz"><b>Água e luz</b><span>Quanto se gasta, onde, mês a mês e o que dá para economizar (multas e demanda sem uso).</span></a><a class="cartao-relatorio painel-destaque" href="#painel-imoveis"><b>Imóveis e matrículas</b><span>Matrículas por situação, tipo, bairro e registro; área total; o que falta no cadastro.</span></a></div>
+        <h3>Painéis (visão geral, com gráficos e filtros)</h3><div class="galeria galeria-paineis"><a class="cartao-relatorio painel-destaque" href="#agualuz"><b>Água e luz</b><span>Quanto se gasta, onde, mês a mês e o que dá para economizar (multas e demanda sem uso).</span></a><a class="cartao-relatorio painel-destaque" href="#painel-imoveis"><b>Imóveis</b><span>Painel das matrículas (situação, tipo, bairro, área, o que falta), Demonstrativo do TCE e relatório com fotos e mapa.</span></a></div>
         ${grupos.map((g) => `<h3>${esc(g)}</h3><div class="galeria">${todos.filter(([, r]) => r.grupo === g).map(([k, r]) => `<a class="cartao-relatorio" href="#relatorio/${k}"><b>${esc(r.titulo)}</b><span>${esc(r.descricao)}</span></a>`).join('')}</div>`).join('')}
-        <h3>Imóveis</h3><div class="galeria"><a class="cartao-relatorio" href="#imoveis/demonstrativo"><b>Demonstrativo dos bens imóveis (TCE/SC)</b><span>Localização, situação do registro, motivo dos não registrados, uso, área e valor.</span></a><a class="cartao-relatorio" href="#imoveis"><b>Situação dos imóveis</b><span>Documentos vencidos, cessões, pendências de regularização.</span></a><a class="cartao-relatorio" href="#imoveis/mapa"><b>Mapa dos imóveis</b><span>Imóveis no mapa de ruas, com link para o Google Maps e arquivo para o Google Earth (KML).</span></a></div>
         <h3>Água e luz (CASAN e CELESC)</h3><div class="galeria"><a class="cartao-relatorio" href="#agualuz"><b>Painel de água e luz</b><span>Total do período, por secretaria, por mês, maiores gastos e custo que dá para evitar.</span></a><a class="cartao-relatorio" href="#agualuz/ligacoes?semFatura=1"><b>Ligações ativas sem fatura</b><span>Contratos ativos sem fatura nos 3 últimos meses (pode ser ligação desligada).</span></a><a class="cartao-relatorio" href="#agualuz/ligacoes?semPredio=1"><b>Ligações sem prédio</b><span>Contratos que ainda não estão ligados a um bem do patrimônio.</span></a><a class="cartao-relatorio" href="#agualuz/faturas"><b>Faturas</b><span>Todas as faturas importadas, mês a mês.</span></a></div>
         <h3>Fotos</h3><div class="galeria"><a class="cartao-relatorio" href="#relatorio-fotos"><b>Relatório com fotos</b><span>Bens com foto por unidade e estado; imóveis com fotos e mapa.</span></a></div>`
     };
@@ -347,14 +361,19 @@
     const v = VP.estado.filtrosRel[chave] = VP.estado.filtrosRel[chave] || Object.assign({}, r.padrao ? r.padrao() : {});
     if (query.id) v.id = query.id;
     const defs = r.filtros.map((k) => F[k]()).concat(r.extras || []);
+    // A tela abre só com os filtros; o relatório aparece ao clicar em "Gerar" (pedido do usuário, 23/10/2026).
+    // Vindo de um link com destino certo (?gerar=1, ou um inventário pelo ?id) gera direto.
+    let gerado = !!(query.gerar || query.id);
+    const filtrosHtml = () => ui.filtros({ id: 'rel', defs, valores: v, busca: false, aoMudar: () => { atualizar(); if (gerado) lancarAntes(); } });
     const desenhar = () => {
+      if (!gerado) return `${filtrosHtml()}<div class="gerar-relatorio"><button type="button" class="botao primario" data-gerar-rel>Gerar relatório</button><span class="ajuda">Escolha os filtros, se quiser, e clique em <b>Gerar relatório</b>.</span></div>`;
       const f = ui.limparValores(v);
       // Sem data de início ou fim (filtro removido): usa o período padrão do relatório
       const pad = r.padrao ? r.padrao() : {};
       for (const k of ['de', 'ate']) if (!f[k] && pad[k]) f[k] = pad[k];
       const out = r.gerar(f);
-      if (out.vazio) return `${ui.filtros({ id: 'rel', defs, valores: v, busca: false, aoMudar: () => { atualizar(); lancarAntes(); } })}<p class="vazio">${esc(out.vazio)}</p>`;
-      return `${ui.filtros({ id: 'rel', defs, valores: v, busca: false, aoMudar: () => { atualizar(); lancarAntes(); } })}
+      if (out.vazio || (out.tabela && !out.tabela.linhas.length)) return filtrosHtml() + VP.semDadosRelatorio(out.vazio, textoFiltros(defs, f), r.semDados);
+      return `${filtrosHtml()}
         <div class="relatorio" id="corpo-relatorio">
           <div class="relatorio-filtros-texto">${esc(textoFiltros(defs, f))}</div>
           <div class="resumo-linha">${(out.resumo || []).join('')}</div>
@@ -364,7 +383,11 @@
           ${out.tabela ? ui.tabela({ id: 'rel-' + chave, colunas: out.tabela.colunas, linhas: out.tabela.linhas, nomePlanilha: chave, porPagina: 100 }) : ''}
         </div>`;
     };
-    const atualizar = () => { document.getElementById('area-rel').innerHTML = desenhar(); ui.ligarTabela('rel-' + chave); };
+    const atualizar = () => {
+      const area = document.getElementById('area-rel'); if (!area) return;
+      area.innerHTML = desenhar(); ui.ligarTabela('rel-' + chave);
+      area.querySelector('[data-gerar-rel]')?.addEventListener('click', () => { gerado = true; atualizar(); lancarAntes(); });
+    };
     // Depreciação automática ao gerar o balancete (opção em Configurações)
     const lancarAntes = async () => {
       if (chave !== 'balancete' || VP.config().depreciacaoAutomatica !== 'balancete') return;
@@ -380,8 +403,10 @@
       html: `<p class="ajuda">${esc(r.descricao)}</p><div id="area-rel">${desenhar()}</div>`,
       ligar() {
         ui.ligarTabela('rel-' + chave);
-        lancarAntes();
+        document.getElementById('area-rel').querySelector('[data-gerar-rel]')?.addEventListener('click', () => { gerado = true; atualizar(); lancarAntes(); });
+        if (gerado) lancarAntes();
         document.querySelector('[data-imprimir-rel]').addEventListener('click', () => {
+          if (!document.getElementById('corpo-relatorio')) return ui.aviso('Primeiro clique em "Gerar relatório".', 'erro');
           const corpo = document.getElementById('corpo-relatorio').cloneNode(true);
           corpo.querySelectorAll('.tabela-barra,.paginacao,button').forEach((x) => x.remove());
           // na impressão vão todas as linhas, não só a página da tela
@@ -389,10 +414,15 @@
           if (st) { const por = st.cfg.porPagina; st.cfg.porPagina = 100000; const tmp = document.createElement('div'); tmp.innerHTML = ui._corpoTabela(st); st.cfg.porPagina = por; tmp.querySelectorAll('.tabela-barra,.paginacao').forEach((x) => x.remove()); const alvo = corpo.querySelector('.tabela-area'); if (alvo) alvo.innerHTML = tmp.innerHTML; }
           ui.imprimir(corpo.innerHTML, r.titulo);
         });
-        document.querySelector('[data-planilha-rel]').addEventListener('click', () => (ui.tabelas['rel-' + chave] ? ui.exportarTabela('rel-' + chave) : ui.aviso('Este relatório não tem tabela.', 'erro')));
+        document.querySelector('[data-planilha-rel]').addEventListener('click', () => (!document.getElementById('corpo-relatorio') ? ui.aviso('Primeiro clique em "Gerar relatório".', 'erro') : ui.tabelas['rel-' + chave] ? ui.exportarTabela('rel-' + chave) : ui.aviso('Este relatório não tem tabela.', 'erro')));
       }
     };
   };
+  // Explica por que veio vazio e o que fazer (usada por todos os relatórios)
+  VP.semDadosRelatorio = (motivo, filtros, onde) => `<div class="aviso-vazio" role="status"><b>Nada para mostrar.</b>
+      <p>${esc(motivo || 'Nenhum registro com estes filtros.')}</p>${filtros ? `<p class="ajuda">${esc(filtros)}</p>` : ''}
+      <ul class="lista-simples"><li>Tire algum filtro ou aumente o período e clique de novo (o relatório já se atualiza ao mudar o filtro).</li>
+      <li>${onde ? esc(onde) : 'Se o sistema ainda não tem esse tipo de informação, ela aparece aqui quando for cadastrada.'}</li></ul></div>`;
   const textoFiltros = (defs, f) => {
     const p = defs.filter((d) => f[d.chave] !== undefined && f[d.chave] !== false).map((d) => {
       const x = f[d.chave];

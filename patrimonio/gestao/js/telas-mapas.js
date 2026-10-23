@@ -77,41 +77,48 @@
   };
 
   // ------------------------------------------------------------------ relatórios com fotos e mapa (etapa 8)
-  T['relatorio-fotos'] = (aba = 'bens') => {
-    const abas = `<nav class="abas"><a href="#relatorio-fotos/bens" class="${aba !== 'imoveis' ? 'ativa' : ''}">Bens</a><a href="#relatorio-fotos/imoveis" class="${aba === 'imoveis' ? 'ativa' : ''}">Imóveis (com mapa)</a></nav>`;
+  T['relatorio-fotos'] = (aba = 'bens', q = {}, op = {}) => {
+    let gerado = !!q.gerar; // abre só com os filtros; o relatório aparece no botão "Gerar" (23/10/2026)
+    const abas = op.semAbas ? '' : `<nav class="abas"><a href="#relatorio-fotos/bens" class="${aba !== 'imoveis' ? 'ativa' : ''}">Bens</a><a href="#relatorio-fotos/imoveis" class="${aba === 'imoveis' ? 'ativa' : ''}">Imóveis (com mapa)</a></nav>`;
     const v = VP.estado.relFotosPat = VP.estado.relFotosPat || { unidadeId: '', estado: '', soComFoto: true };
     const foto = (f) => `<figure><img src="${esc(f.dataURL)}" alt="Foto"><figcaption>${u.data(f.data)}</figcaption></figure>`;
     const desenhar = () => {
       if (aba === 'imoveis') {
         const im = VP.imoveis.lista().filter((b) => b.tipo === 'imovel');
+        if (!im.length) return VP.semDadosRelatorio('Nenhum bem imóvel cadastrado.', '', 'Os imóveis entram pela planilha (aba Imóveis) ou em Bens imóveis → Novo bem.');
         const pontos = im.filter(M.temCoord).map((b) => ({ lat: b.imovel.lat, lon: b.imovel.lon, cor: M.corRegistro(b), rotulo: `${b.codigo} · ${b.descricao}`, link: '#bem/' + b.id }));
         return `<div id="corpo-relatorio"><h2>Imóveis — fotos e mapa · ${esc(VP.nome('entidades', 'E1'))}</h2><p class="ajuda">${u.inteiro(im.length)} imóvel(is) · gerado em ${u.data(VP.Plataforma.hoje())}</p>
           <section class="cartao"><h3>Mapa</h3>${G.mapaPontos(pontos, { titulo: 'Imóveis' })}<div class="legenda">${Object.entries(CORES_REG).map(([n, c]) => `<span><i style="background:${c}"></i>${esc(n)}</span>`).join('')}</div></section>
           <div class="fichas-fotos">${im.map((b) => { const docs = VP.imoveis.docsDe(b.id); const venc = docs.filter((d) => VP.imoveis.situacaoDoc(d) === 'vencido'); return `<article class="ficha-foto-rel"><header><b>${esc(b.codigo)}</b> · ${esc(b.descricao)}</header>
             <p>${esc([b.endereco?.logradouro, b.endereco?.bairro].filter(Boolean).join(', '))} · ${esc(b.imovel?.situacaoRegistro || '—')}${b.imovel?.motivoPendencia ? ' (' + esc(b.imovel.motivoPendencia) + ')' : ''} · ${esc(b.imovel?.uso || '')} · ${esc(u.moeda(VP.saldo(b).liquido))}${venc.length ? ` · <b>${venc.length} documento(s) vencido(s)</b>` : ''}${M.temCoord(b) ? ` · ${b.imovel.lat}, ${b.imovel.lon}` : ''}</p>
-            <div class="fotos-rel">${(b.fotos || []).filter((f) => f.dataURL).slice(0, 4).map(foto).join('') || '<span class="vazio">Sem foto</span>'}</div></article>`; }).join('')}</div></div>`;
+            <div class="fotos-rel">${((b.fotos || []).filter((f) => f.dataURL).slice(0, 4).map(foto).join('') + (VP.blocoMatricula ? VP.blocoMatricula.fotosDoBem(b, 4) : '')) || '<span class="vazio">Sem foto</span>'}</div></article>`; }).join('')}</div></div>`;
       }
       let l = VP.db.lista('bens').filter((b) => b.status !== 'baixado' && !['imovel', 'infraestrutura'].includes(b.tipo));
       if (v.unidadeId) l = l.filter((b) => b.unidadeId === v.unidadeId);
       if (v.estado) l = l.filter((b) => String(b.estado) === v.estado);
       if (v.soComFoto) l = l.filter((b) => (b.fotos || []).some((f) => f.dataURL));
       l.sort((a, b) => a.codigo - b.codigo);
+      if (!l.length) return VP.semDadosRelatorio(v.soComFoto ? 'Nenhum bem com foto neste filtro.' : 'Nenhum bem neste filtro.', '', v.soComFoto ? 'As fotos entram pela ficha do bem ou pelo aplicativo de campo. Desmarque "Só bens com foto" para ver todos os bens.' : 'Os bens entram por Entradas, Novo bem ou pela planilha.');
       const max = 200;
       return `<div id="corpo-relatorio"><h2>Bens — relatório fotográfico · ${esc(VP.nome('entidades', 'E1'))}</h2><p class="ajuda">${u.inteiro(l.length)} bem(ns)${v.unidadeId ? ' · ' + esc(VP.nome('unidades', v.unidadeId)) : ''} · gerado em ${u.data(VP.Plataforma.hoje())}${l.length > max ? ` · mostrando os primeiros ${max}` : ''}</p>
         <div class="fichas-fotos">${l.slice(0, max).map((b) => `<article class="ficha-foto-rel"><header><b>${esc(b.codigo)}</b> · plaqueta ${esc(b.plaqueta)} · ${esc(b.descricao)}</header>
           <p>${esc(VP.nome('unidades', b.unidadeId))}${b.localizacao ? ' · ' + esc(b.localizacao) : ''} · ${esc(L.estados[b.estado] || '')} · ${esc(b.responsavelId ? VP.nome('responsaveis', b.responsavelId) : 'sem responsável')}</p>
           <div class="fotos-rel">${(b.fotos || []).filter((f) => f.dataURL).slice(0, 4).map(foto).join('') || '<span class="vazio">Sem foto</span>'}</div></article>`).join('') || '<p class="vazio">Nenhum bem neste filtro.</p>'}</div></div>`;
     };
+    const tela = () => (gerado ? desenhar() : '<div class="gerar-relatorio"><button type="button" class="botao primario" data-gerar-rf>Gerar relatório</button><span class="ajuda">Escolha os filtros, se quiser, e clique em <b>Gerar relatório</b>.</span></div>');
     return {
       titulo: 'Relatório com fotos',
       acoes: '<a class="botao" href="#relatorios">‹ Relatórios</a> <button class="botao primario" data-imprimir-rf>Imprimir / PDF</button>',
       html: `${abas}${aba === 'imoveis' ? '' : `<div class="linha-filtros"><label>Unidade <select data-rfp="unidadeId"><option value="">Todas</option>${VP.db.lista('unidades').sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((x) => `<option value="${esc(x.id)}" ${x.id === v.unidadeId ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
         <label>Estado <select data-rfp="estado"><option value="">Todos</option>${Object.entries(L.estados).reverse().map(([k, n]) => `<option value="${k}" ${k === v.estado ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
         <label class="linha-check"><input type="checkbox" data-rfp="soComFoto" ${v.soComFoto ? 'checked' : ''}> Só bens com foto</label></div>`}
-        <div id="area-rfp">${desenhar()}</div>`,
+        <div id="area-rfp">${tela()}</div>`,
       ligar() {
-        document.querySelectorAll('[data-rfp]').forEach((el) => el.addEventListener('change', () => { v[el.dataset.rfp] = el.type === 'checkbox' ? el.checked : el.value; document.getElementById('area-rfp').innerHTML = desenhar(); }));
-        document.querySelector('[data-imprimir-rf]').addEventListener('click', () => ui.imprimir(document.getElementById('corpo-relatorio').innerHTML, 'Relatório com fotos'));
+        const area = document.getElementById('area-rfp');
+        const atualizar = () => { area.innerHTML = tela(); area.querySelector('[data-gerar-rf]')?.addEventListener('click', () => { gerado = true; atualizar(); }); };
+        area.querySelector('[data-gerar-rf]')?.addEventListener('click', () => { gerado = true; atualizar(); });
+        document.querySelectorAll('[data-rfp]').forEach((el) => el.addEventListener('change', () => { v[el.dataset.rfp] = el.type === 'checkbox' ? el.checked : el.value; atualizar(); }));
+        document.querySelector('[data-imprimir-rf]').addEventListener('click', () => { const c = document.getElementById('corpo-relatorio'); if (!c) return ui.aviso('Primeiro clique em "Gerar relatório".', 'erro'); ui.imprimir(c.innerHTML, 'Relatório com fotos'); });
       }
     };
   };

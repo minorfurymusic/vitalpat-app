@@ -329,6 +329,10 @@
       ${pode ? '<div class="linha-botoes"><button class="botao pequeno" data-novo-doc>Adicionar link (foto, mapa, documento)</button></div>' : ''}
     </div>`;
   };
+  // miniaturas das fotos (Drive) das matrículas ligadas a um bem — para relatórios com fotos
+  BM.fotosDoBem = (b, max = 4) => numerosDaLista(b.imovel?.matricula).map(VP.matriculaPeloNumero).filter(Boolean)
+    .flatMap((m) => (m.documentos || []).filter((d) => !d.removido && d.tipo === 'Foto')).slice(0, max)
+    .map((d) => { const idd = idDrive(d.link); return `<figure>${idd ? `<a href="${esc(soLink(d.link))}" target="_blank" rel="noopener"><img src="https://drive.google.com/thumbnail?id=${esc(idd)}&sz=w400" alt="${esc(d.titulo || 'Foto')}" loading="lazy" onerror="this.remove()"></a>` : ''}<figcaption><a href="${esc(soLink(d.link))}" target="_blank" rel="noopener">${esc(d.titulo || 'Foto (Drive)')}</a></figcaption></figure>`; }).join('');
   BM.ligar = (raiz, depois) => {
     raiz.querySelectorAll('[data-bloco-mat]').forEach((bloco) => {
       const x = VP.db.pega('matriculas', bloco.dataset.blocoMat);

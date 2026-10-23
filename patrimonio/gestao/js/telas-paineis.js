@@ -12,7 +12,15 @@
   const contar = (lista, f) => { const c = new Map(); for (const x of lista) { const k = f(x) || ''; c.set(k, (c.get(k) || 0) + 1); } return [...c].sort((a, b) => b[1] - a[1]); };
   const lista = (l) => l.filter((x) => !x.excluido);
 
-  T['painel-imoveis'] = (_p, q = {}) => {
+  // Relatórios → Imóveis: uma entrada só, com abas (pedido do usuário, 23/10/2026)
+  const ABAS = [['', 'Painel'], ['demonstrativo', 'Demonstrativo (TCE)'], ['fotos', 'Fotos e mapa']];
+  const navImoveis = (aba) => `<nav class="abas" aria-label="Imóveis">${ABAS.map(([k, t]) => `<a href="#painel-imoveis${k ? '/' + k : ''}" class="${k === aba ? 'ativa' : ''}">${t}</a>`).join('')}</nav>
+    <p class="ajuda">Documentos vencidos, cessões e pendências de regularização: em <a href="#imoveis">Bens imóveis → Situação</a>.</p>`;
+  T['painel-imoveis'] = (aba = '', q = {}) => {
+    if (aba === 'demonstrativo' || aba === 'fotos') {
+      const t = aba === 'demonstrativo' ? T.relatorio('imoveis', q) : T['relatorio-fotos']('imoveis', q, { semAbas: true });
+      return Object.assign({}, t, { titulo: 'Imóveis', html: navImoveis(aba) + t.html });
+    }
     const todas = lista(VP.db.lista('matriculas'));
     const sit = q.situacao || '', tipo = q.tipoImovel || '', bairro = q.bairro || '';
     const filtro = { situacao: sit, tipoImovel: tipo, bairro };
@@ -59,7 +67,7 @@
       ${linhaQ('Bem ligado no patrimônio', (() => { const com = new Set(bens.flatMap((b) => String(b.imovel?.matricula || '').split(/\s*;\s*/))); return tem((m) => com.has(String(m.matricula))); })(), cad({ bem: 'nao' }), 'Terreno ou prédio cadastrado como bem.')}
       </tbody></table></div>`;
 
-    const html = filtros + numeros + `
+    const html = navImoveis('') + filtros + numeros + `
       <div class="painel-grade">
         <section class="cartao" id="pi-situacao"><h3>Matrículas por situação</h3>${G.barrasH(porSit, { titulo: 'Matrículas por situação' })}<p class="painel-nota">Clique para filtrar o painel.</p></section>
         <section class="cartao" id="pi-registro"><h3>Tipo de registro no cartório</h3>${G.barrasH(porReg, { titulo: 'Tipo de registro' })}<p class="painel-nota">Transcrição = registro antigo (livro 3). Clique para ver a lista.</p></section>
@@ -70,7 +78,7 @@
       </div>
       <section class="cartao" id="pi-qualidade"><h3>O que falta no cadastro</h3>${qualidade}</section>`;
     return {
-      titulo: 'Imóveis e matrículas', html,
+      titulo: 'Imóveis', html,
       acoes: '<a class="botao" href="#relatorios">‹ Relatórios</a>',
       ligar() {
         document.querySelectorAll('#filtros-imoveis [data-pf]').forEach((el) => el.addEventListener('change', () => VP.app.ir('#painel-imoveis' + qs(Object.assign({}, filtro, { [el.dataset.pf]: el.value })))));

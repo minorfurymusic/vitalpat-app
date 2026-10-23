@@ -471,3 +471,7 @@ body.papel-consulta [data-nova-equipe], body.papel-campo [data-nova-equipe], bod
 .tabela-painel th, .tabela-painel td { padding: 8px; vertical-align: top; }
 .painel-filtros select { font: inherit; font-size: 0.95rem; color: var(--texto); background: var(--superficie); border: 1px solid var(--borda); border-radius: 8px; padding: 7px 10px; }
 .cartao-relatorio.painel-destaque { border-left: 4px solid var(--dourado); }
+/* Relatórios abrem com o botão "Gerar" e explicam quando não há dados (23/10/2026) */
+.gerar-relatorio { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 14px 0; padding: 16px; border: 1px dashed var(--borda); border-radius: var(--raio); background: var(--superficie); }
+.aviso-vazio { margin: 14px 0; padding: 14px 16px; border-radius: var(--raio); border: 1px solid var(--borda); border-left: 4px solid var(--atencao); background: var(--superficie); }
+.aviso-vazio p { margin: 6px 0; }

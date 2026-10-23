@@ -236,10 +236,10 @@
     add('imprestaveis', 'critico', 'Bens imprestáveis aguardando baixa', bens.filter((b) => Number(b.estado) === 1).length, '#bens?estado=1', 'Bem em estado "Imprestável" não tem conserto: abra a ficha e use "Iniciar baixa".');
     add('inserviveis', 'info', 'Bens inservíveis disponíveis (para leilão, doação ou transferência)', bens.filter((b) => b.status === 'inservivel').length, '#bens?status=inservivel');
     add('lotes-baixa', 'info', 'Lotes de baixa em montagem (falta confirmar)', VP.db.lista('lotesBaixa').filter((l) => l.situacao === 'rascunho').length, '#baixa-lote');
-    add('seguro-vencido', 'critico', 'Seguros vencidos', bens.filter((b) => b.seguro?.termino && b.seguro.termino < hoje).length, '#relatorio/seguros');
-    add('seguro-vence', 'atencao', `Seguros vencendo em até ${cfg.avisoSeguroDias} dias`, bens.filter((b) => b.seguro?.termino && b.seguro.termino >= hoje && b.seguro.termino <= limiteSeguro).length, '#relatorio/seguros');
+    add('seguro-vencido', 'critico', 'Seguros vencidos', bens.filter((b) => b.seguro?.termino && b.seguro.termino < hoje).length, '#relatorio/seguros?gerar=1');
+    add('seguro-vence', 'atencao', `Seguros vencendo em até ${cfg.avisoSeguroDias} dias`, bens.filter((b) => b.seguro?.termino && b.seguro.termino >= hoje && b.seguro.termino <= limiteSeguro).length, '#relatorio/seguros?gerar=1');
     const limiteGar = u.somaDias(hoje, cfg.avisoGarantiaDias);
-    add('garantia-vence', 'atencao', `Garantias vencendo em até ${cfg.avisoGarantiaDias} dias`, bens.filter((b) => b.garantia?.termino && b.garantia.termino >= hoje && b.garantia.termino <= limiteGar).length, '#relatorio/seguros');
+    add('garantia-vence', 'atencao', `Garantias vencendo em até ${cfg.avisoGarantiaDias} dias`, bens.filter((b) => b.garantia?.termino && b.garantia.termino >= hoje && b.garantia.termino <= limiteGar).length, '#relatorio/seguros?gerar=1');
 
     const mesAtual = hoje.slice(0, 7);
     const ultimo = VP.ultimoFechamento();

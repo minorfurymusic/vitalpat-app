@@ -41,7 +41,7 @@
       html: `
         <div class="resumo-linha grande">
           ${G.numero('Bens em uso', u.inteiro(bens.length), `${u.inteiro(bens.filter((b) => b.status === 'desuso').length)} em desuso`, '#bens')}
-          ${G.numero('Valor contábil total', u.moedaCurta(total), u.moeda(total), '#relatorio/resumo')}
+          ${G.numero('Valor contábil total', u.moedaCurta(total), u.moeda(total), '#relatorio/resumo?gerar=1')}
           ${G.numero('Depreciação do último mês fechado', ult ? u.moedaCurta(ult.total) : '—', ult ? u.mesExtenso(ult.mes) : 'nenhum mês fechado', '#financeiro/fechamento')}
           ${G.numero('Pendências', u.inteiro(pend.length), pend.length ? 'veja a lista abaixo' : 'tudo em dia')}
         </div>

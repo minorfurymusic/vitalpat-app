@@ -167,7 +167,7 @@
 
   // ------------------------------------------------------------------ painel dos imóveis + demonstrativo TCE
   T.imoveis = (aba = 'painel') => {
-    const abas = `<nav class="abas">${[['painel', 'Situação'], ['demonstrativo', 'Demonstrativo (TCE/SC)'], ['documentos', 'Documentos'], ['cessoes', 'Cessões'], ['pendencias', 'Pendências'], ['mapa', 'Mapa']].map(([k, n]) => `<a href="#imoveis${k === 'painel' ? '' : '/' + k}" class="${k === aba ? 'ativa' : ''}">${n}</a>`).join('')}</nav>`;
+    const abas = `<nav class="abas">${[['painel', 'Situação'], ['documentos', 'Documentos'], ['cessoes', 'Cessões'], ['pendencias', 'Pendências'], ['mapa', 'Mapa']].map(([k, n]) => `<a href="#imoveis${k === 'painel' ? '' : '/' + k}" class="${k === aba ? 'ativa' : ''}">${n}</a>`).join('')}</nav>`;
     const im = E.lista();
     const imo = im.filter((b) => b.tipo === 'imovel');
     const nomeBem = (id) => { const b = VP.db.pega('bens', id); return b ? `<a href="#bem/${esc(b.id)}">${esc(b.codigo)} · ${esc(b.descricao)}</a>` : '—'; };
@@ -186,27 +186,16 @@
       const l = VP.db.lista('pendenciasImovel').filter((p) => ids.has(p.bemId));
       return { titulo: 'Bens imóveis', html: abas + ui.tabela({ id: 'imo-pend', linhas: l, porPagina: 100, nomePlanilha: 'pendencias-imoveis', vazio: 'Nenhuma pendência.', colunas: [{ chave: 'situacao', titulo: 'Situação', valor: (p) => (E.pendAtrasada(p) ? 'Atrasada' : { aberta: 'Aberta', resolvida: 'Resolvida', cancelada: 'Cancelada' }[p.situacao]) }, { chave: 'imovel', titulo: 'Imóvel', html: (p) => nomeBem(p.bemId), valor: (p) => valBem(p.bemId) }, { chave: 'descricao', titulo: 'O que fazer' }, { chave: 'resp', titulo: 'Responsável', valor: (p) => VP.nome('responsaveis', p.responsavelId) }, { chave: 'prazo', titulo: 'Prazo', valor: (p) => u.data(p.prazo), ordenar: (p) => p.prazo || '9' }] }), ligar() { ui.ligarTabela('imo-pend'); } };
     }
-    if (aba === 'demonstrativo') {
-      const linhas = imo.map((b) => ({ id: b.id, codigo: b.codigo, descricao: b.descricao, endereco: [b.endereco?.logradouro, b.endereco?.bairro, b.endereco?.cidade].filter(Boolean).join(', '), unidade: VP.nome('unidades', b.unidadeId), matricula: b.imovel?.matricula || '', situacao: b.imovel?.situacaoRegistro || 'Não informado', motivo: b.imovel?.motivoPendencia || '', uso: b.imovel?.uso || '', area: b.imovel?.areaTerreno || null, construida: b.imovel?.areaConstruida || null, valor: VP.saldo(b).liquido, cedido: E.cessoesDe(b.id).some((c) => E.cessaoAtiva(c) && c.direcao === 'a-terceiros') ? 'Sim' : 'Não' }));
-      const grupos = E.SITUACOES_REG.concat(['Não informado']).map((s) => ({ s, l: linhas.filter((x) => x.situacao === s) })).filter((g) => g.l.length);
-      return {
-        titulo: 'Bens imóveis',
-        acoes: '<button class="botao primario" data-imprimir-demo>Imprimir / PDF</button>',
-        html: `${abas}<div id="corpo-demo"><h2 class="so-impressao">Demonstrativo dos bens imóveis — ${esc(VP.config().entidade || '')}</h2>
-          <div class="resumo-linha">${grupos.map((g) => G.numero(g.s, u.inteiro(g.l.length), u.moeda(g.l.reduce((t, x) => t + x.valor, 0)))).join('')}</div>
-          <p class="ajuda">IN TC-20/2015, Anexo V: localização, situação e valor; para os não registrados, o que impede a regularização.</p>
-          ${ui.tabela({ id: 'imo-demo', linhas, porPagina: 500, nomePlanilha: 'demonstrativo-imoveis', colunas: [{ chave: 'codigo', titulo: 'Código', num: true }, { chave: 'descricao', titulo: 'Imóvel', html: (x) => `<a href="#bem/${esc(x.id)}">${esc(x.descricao)}</a>`, valor: (x) => x.descricao }, { chave: 'endereco', titulo: 'Localização' }, { chave: 'unidade', titulo: 'Unidade', oculta: true }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'situacao', titulo: 'Situação' }, { chave: 'motivo', titulo: 'O que impede o registro' }, { chave: 'uso', titulo: 'Uso' }, { chave: 'area', titulo: 'Terreno (m²)', num: true, formato: (v) => (v ? u.inteiro(v) : '') }, { chave: 'construida', titulo: 'Construída (m²)', num: true, formato: (v) => (v ? u.inteiro(v) : ''), oculta: true }, { chave: 'cedido', titulo: 'Cedido a terceiros', oculta: true }, { chave: 'valor', titulo: 'Valor contábil', num: true, soma: true, formato: u.moeda }] })}</div>`,
-        ligar() { ui.ligarTabela('imo-demo'); document.querySelector('[data-imprimir-demo]').addEventListener('click', () => { const c = document.getElementById('corpo-demo').cloneNode(true); c.querySelectorAll('.tabela-barra,.paginacao').forEach((x) => x.remove()); ui.imprimir(c.innerHTML, 'Demonstrativo dos bens imóveis'); }); }
-      };
-    }
+    // o Demonstrativo (TCE/SC) fica só em Relatórios → Imóveis (decisão do usuário, 23/10/2026); o endereço antigo leva para lá
+    if (aba === 'demonstrativo') return T['painel-imoveis']('demonstrativo', {});
     const a = E.alertas();
-    const porSit = E.SITUACOES_REG.map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.situacaoRegistro === s).length, link: '#imoveis/demonstrativo' }));
+    const porSit = E.SITUACOES_REG.map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.situacaoRegistro === s).length, link: '#painel-imoveis/demonstrativo?gerar=1' }));
     const porUso = ['Uso comum do povo', 'Uso especial', 'Dominical'].map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.uso === s).length }));
     const lista = (titulo, itens, fmt) => (itens.length ? `<h4>${esc(titulo)} (${itens.length})</h4><ul class="lista-simples">${itens.slice(0, 8).map(fmt).join('')}${itens.length > 8 ? '<li>…</li>' : ''}</ul>` : '');
     return {
       titulo: 'Bens imóveis',
       acoes: '<a class="botao" href="#bens/imoveis">Lista de imóveis</a> <a class="botao primario" href="#novo-bem/imovel">+ Novo imóvel</a>',
-      html: `${abas}<div class="resumo-linha">${G.numero('Imóveis', u.inteiro(imo.length), u.moeda(imo.reduce((t, b) => t + VP.saldo(b).liquido, 0)))}${G.numero('Não registrados', u.inteiro(imo.filter((b) => b.imovel?.situacaoRegistro && b.imovel.situacaoRegistro !== 'Registrado').length), 'em regularização, sem registro ou posse', '#imoveis/demonstrativo')}${G.numero('Documentos vencidos', u.inteiro(a.docsVencidos.length), `${a.docsVencendo.length} vencendo em ${avisoDias()} dias`, '#imoveis/documentos')}${G.numero('Cessões vencidas', u.inteiro(a.cessoesVencidas.length), `${a.cessoesVencendo.length} vencendo`, '#imoveis/cessoes')}${G.numero('Pendências atrasadas', u.inteiro(a.pendAtrasadas.length), '', '#imoveis/pendencias')}</div>
+      html: `${abas}<div class="resumo-linha">${G.numero('Imóveis', u.inteiro(imo.length), u.moeda(imo.reduce((t, b) => t + VP.saldo(b).liquido, 0)))}${G.numero('Não registrados', u.inteiro(imo.filter((b) => b.imovel?.situacaoRegistro && b.imovel.situacaoRegistro !== 'Registrado').length), 'em regularização, sem registro ou posse', '#painel-imoveis/demonstrativo?gerar=1')}${G.numero('Documentos vencidos', u.inteiro(a.docsVencidos.length), `${a.docsVencendo.length} vencendo em ${avisoDias()} dias`, '#imoveis/documentos')}${G.numero('Cessões vencidas', u.inteiro(a.cessoesVencidas.length), `${a.cessoesVencendo.length} vencendo`, '#imoveis/cessoes')}${G.numero('Pendências atrasadas', u.inteiro(a.pendAtrasadas.length), '', '#imoveis/pendencias')}</div>
         <div class="grade-graficos"><section class="cartao"><h3>Situação do registro</h3>${G.barrasH(porSit, { mostrarZeros: true })}</section><section class="cartao"><h3>Classificação de uso</h3>${G.barrasH(porUso, { mostrarZeros: true })}</section></div>
         <section class="cartao"><h3>Para resolver</h3>
           ${lista('Não registrados sem o motivo informado (o TCE pede)', a.semMotivo, (b) => `<li><a href="#bem/${esc(b.id)}">${esc(b.codigo)} · ${esc(b.descricao)}</a></li>`)}

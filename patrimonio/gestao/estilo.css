@@ -422,3 +422,52 @@ body.papel-consulta [data-nova-equipe], body.papel-campo [data-nova-equipe], bod
 /* Água e luz (23/10/2026) */
 .cartoes-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .numero-grande { font-size: 1.6rem; font-weight: 700; margin: 4px 0; }
+/* Bloco da matrícula na ficha da matrícula e na ficha do bem (23/10/2026) */
+.bloco-matricula h4 { margin: 14px 0 6px; font-size: 1rem; }
+.bloco-matricula details summary { cursor: pointer; margin-top: 12px; font-weight: 600; }
+.fotos-matricula { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.fotos-matricula figure { margin: 0; }
+.fotos-matricula img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid var(--borda, #d0d7de); background: #f3f4f6; }
+.fotos-matricula figcaption { font-size: 0.85rem; margin-top: 4px; word-break: break-word; }
+#sec-agualuz .tabela th { padding: 6px 8px; }
+/* Tela Cadastros: menu ao lado por grupos, busca e filtros (23/10/2026) */
+.cad-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 20px; align-items: start; }
+.cad-menu { position: sticky; top: 12px; border: 1px solid var(--borda); border-radius: 8px; padding: 8px; background: var(--superficie); max-height: calc(100vh - 120px); overflow: auto; }
+.cad-menu h4 { margin: 10px 8px 4px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-2); }
+.cad-menu h4:first-child { margin-top: 2px; }
+.cad-menu a { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; color: inherit; text-decoration: none; font-size: 0.92rem; }
+.cad-menu a:hover { background: var(--primaria-clara); }
+.cad-menu a.ativa { background: var(--primaria); color: var(--primaria-texto); }
+.cad-menu .contagem { opacity: 0.75; font-variant-numeric: tabular-nums; }
+.cad-menu-celular { display: none; }
+.cad-titulo { margin: 0 0 6px; font-size: 1.25rem; }
+.cad-contagem { margin: 6px 0; }
+@media (max-width: 900px) {
+  .cad-layout { grid-template-columns: minmax(0, 1fr); }
+  .cad-menu { display: none; }
+  .cad-menu-celular { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+  .cad-menu-celular select { font-size: 1rem; padding: 6px; }
+}
+/* Painéis (23/10/2026): séries com cor fixa — 1 = água (azul), 2 = luz (laranja) */
+.legenda .serie-2 { background: var(--serie-2); }
+.grafico-svg .coluna.s1 { fill: var(--serie-1); } .grafico-svg .coluna.s2 { fill: var(--serie-2); }
+.grafico-svg a:hover .coluna, .grafico-svg a:focus .coluna { filter: brightness(1.15); }
+.barra-trilho.multi { display: flex; gap: 2px; }
+.barra-trilho.multi .barra { border-radius: 0; }
+.barra-trilho.multi .barra:last-child { border-radius: 0 4px 4px 0; }
+.barra.s1 { background: var(--serie-1); } .barra.s2 { background: var(--serie-2); }
+.painel-filtros { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin: 4px 0 14px; }
+.painel-filtros label { display: flex; flex-direction: column; gap: 3px; font-size: 0.85rem; color: var(--texto-2); }
+.painel-filtros select { min-width: 130px; }
+.painel-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; margin-top: 14px; }
+.painel-grade > .cartao { margin: 0; }
+.painel-nota { font-size: 0.85rem; color: var(--texto-2); margin: 6px 0 0; }
+.selo-alerta { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: color-mix(in srgb, var(--critico) 14%, transparent); color: var(--texto); border: 1px solid var(--critico); }
+.selo-atencao { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: color-mix(in srgb, var(--atencao) 18%, transparent); color: var(--texto); border: 1px solid var(--atencao); }
+.serie-luz .grafico-svg .coluna { fill: var(--serie-2); }
+.legenda-ponto { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.legenda-ponto i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legenda-ponto .serie-1 { background: var(--serie-1); } .legenda-ponto .serie-2 { background: var(--serie-2); }
+.tabela-painel th, .tabela-painel td { padding: 8px; vertical-align: top; }
+.painel-filtros select { font: inherit; font-size: 0.95rem; color: var(--texto); background: var(--superficie); border: 1px solid var(--borda); border-radius: 8px; padding: 7px 10px; }
+.cartao-relatorio.painel-destaque { border-left: 4px solid var(--dourado); }

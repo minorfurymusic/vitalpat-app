@@ -36,7 +36,7 @@
     esconder: '<path d="M15 6l-6 6 6 6"/>'
   };
   const icone = (nome) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome]}</svg>`;
-  const rotaMenu = { relatorio: 'relatorios', unidade: 'cadastros/unidades', imoveis: 'bens/imoveis', matricula: 'cadastros/matriculas' };
+  const rotaMenu = { relatorio: 'relatorios', 'painel-imoveis': 'relatorios', unidade: 'cadastros/unidades', imoveis: 'bens/imoveis', matricula: 'cadastros/matriculas' };
   // Qual aba do menu acende: a ficha do bem e o "novo bem" acendem a aba do tipo do bem
   const abaDoTipo = (tipo) => (tipo === 'veiculo' ? 'frota' : ['imovel', 'infraestrutura'].includes(tipo) ? 'bens/imoveis' : 'bens/moveis');
 

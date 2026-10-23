@@ -135,10 +135,14 @@
     const docs = E.docsDe(b.id), ces = E.cessoesDe(b.id), pend = E.pendenciasDe(b.id);
     const arq = (l) => (l || []).filter((a) => a.dataURL).map((a) => `<a href="${esc(a.dataURL)}" target="_blank" rel="noopener" download="${esc(a.nome || 'documento')}">${esc(a.nome || 'arquivo')}</a>`).join(' ');
     const temLocal = Number.isFinite(b.imovel?.lat) && Number.isFinite(b.imovel?.lon);
+    const pode = b.status !== 'baixado' && (!VP.servidor?.ativo || VP.servidor.podeAlterar());
+    // matrículas cadastradas (Cadastros → Matrículas) ligadas a este bem; o mesmo bloco aparece na ficha da matrícula
+    const mats = VP.blocoMatricula ? String(b.imovel?.matricula || '').split(/\s*;\s*/).filter(Boolean).map(VP.matriculaPeloNumero).filter(Boolean) : [];
     return `
-      <section class="cartao secao" id="sec-matricula"><header><h3>Matrícula</h3>${b.status !== 'baixado' && (!VP.servidor?.ativo || VP.servidor.podeAlterar()) ? '<button class="botao pequeno" data-ler-matricula>Ler matrícula (PDF)</button>' : ''}</header>
-        <p>${b.imovel?.matricula ? `Matrícula <b>${esc(b.imovel.matricula)}</b>${b.imovel.cartorio ? ' · ' + esc(b.imovel.cartorio) : ''}` : '<span class="vazio">Matrícula não informada.</span>'}${b.imovel?.proprietarioMatricula ? `<br>Proprietário na matrícula: ${esc(b.imovel.proprietarioMatricula)}` : ''}${b.imovel?.ultimoRegistroMatricula ? ` · último registro em ${u.data(b.imovel.ultimoRegistroMatricula)}` : ''}</p>
-        <p class="ajuda">Escolha o PDF da matrícula (do cartório ou do e-Cartório): o sistema lê matrícula, cartório, área, endereço, inscrição, proprietário e data do último registro, mostra para conferir e anexa o PDF.</p></section>
+      <section class="cartao secao" id="sec-matricula"><header><h3>Matrícula: PDF, texto, fotos e mapas</h3>${pode ? '<button class="botao pequeno" data-ler-matricula>Ler matrícula (PDF do computador)</button>' : ''}</header>
+        <p>${b.imovel?.matricula ? `Matrícula <b>${VP.linksMatriculas ? VP.linksMatriculas(b.imovel.matricula) : esc(b.imovel.matricula)}</b>${b.imovel.cartorio ? ' · ' + esc(b.imovel.cartorio) : ''}` : '<span class="vazio">Matrícula não informada.</span>'}${b.imovel?.proprietarioMatricula ? `<br>Proprietário na matrícula: ${esc(b.imovel.proprietarioMatricula)}` : ''}${b.imovel?.ultimoRegistroMatricula ? ` · último registro em ${u.data(b.imovel.ultimoRegistroMatricula)}` : ''}</p>
+        ${mats.length ? mats.map((m) => `${mats.length > 1 ? `<h4>Matrícula ${esc(m.matricula)}</h4>` : ''}${VP.blocoMatricula.html(m, { pode, textoAberto: false })}`).join('') : (b.imovel?.matricula ? '<p class="ajuda">Esta matrícula ainda não está em Cadastros → Matrículas, por isso não há PDF, texto nem fotos para mostrar aqui.</p>' : '')}</section>
+      ${VP.aguaLuz ? VP.aguaLuz.cartaoDoBem(b) : ''}
       <section class="cartao secao" id="sec-local-imovel"><header><h3>Localização no mapa</h3><button class="botao pequeno" data-local-imovel>${temLocal ? 'Alterar' : 'Informar'}</button></header>
         ${temLocal ? `<p>${esc(b.imovel.lat)}, ${esc(b.imovel.lon)} · <a href="https://www.google.com/maps/search/?api=1&query=${esc(b.imovel.lat)},${esc(b.imovel.lon)}" target="_blank" rel="noopener">Abrir no Google Maps</a> · <a href="#imoveis/mapa">Ver no mapa dos imóveis</a></p>` : '<p class="vazio">Sem localização. Informe para o imóvel aparecer no mapa e no relatório com mapa.</p>'}</section>
       <section class="cartao secao" id="sec-docs-imovel"><header><h3>Documentos do imóvel</h3><button class="botao pequeno" data-imo="doc">+ Documento</button></header>
@@ -153,6 +157,7 @@
     const area = document.getElementById('conteudo');
     area.querySelectorAll('[data-imo]').forEach((el) => el.addEventListener('click', () => ({ doc: () => E.novoDocumento(b, re), cessao: () => E.novaCessao(b, re), pendencia: () => E.novaPendencia(b, re) })[el.dataset.imo]()));
     area.querySelector('[data-ler-matricula]')?.addEventListener('click', () => VP.matricula.lerParaBem(b, re));
+    if (VP.blocoMatricula) VP.blocoMatricula.ligar(area.querySelector('#sec-matricula') || area, re);
     area.querySelector('[data-local-imovel]')?.addEventListener('click', () => VP.mapas.informarLocal(b, re));
     area.querySelectorAll('[data-imo-doc]').forEach((el) => el.addEventListener('click', () => E.novoDocumento(b, re, VP.db.pega('documentosImovel', el.dataset.imoDoc))));
     area.querySelectorAll('[data-imo-renovar]').forEach((el) => el.addEventListener('click', () => E.renovarCessao(b, VP.db.pega('cessoesImovel', el.dataset.imoRenovar), re)));

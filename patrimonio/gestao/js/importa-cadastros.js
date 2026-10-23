@@ -104,7 +104,9 @@
       { k: 'situacao', t: 'Situação', tipo: 'opcao', opcoes: SITUACOES_MATRICULA, padrao: 'ativa' }, { k: 'motivoSituacao', t: 'Motivo da situação' },
       { k: 'proprietario', t: 'Proprietário no cartório' }, { k: 'areaCartorio', t: 'Área (m²) no cartório', tipo: 'numero' },
       { k: 'linhasOrigem', t: 'Linhas de origem' }, { k: 'avisos', t: 'Avisos' },
-      { k: 'pdfLinks', t: 'PDF da matrícula (link)', apelidos: ['pdf', 'link do pdf', 'pdf da matricula'] }, { k: 'texto', t: 'Texto da matrícula', apelidos: ['texto', 'txt'] }],
+      { k: 'pdfLinks', t: 'PDF da matrícula (link)', apelidos: ['pdf', 'link do pdf', 'pdf da matricula'] }, { k: 'texto', t: 'Texto da matrícula', apelidos: ['texto', 'txt'] },
+      // fotos e mapas por link (23/10/2026): só ACRESCENTAM à matrícula; o que já está ligado (ou foi tirado) não muda. Vários: separar com ';'. Pode ser "Nome | link".
+      { k: '_fotos', t: 'Fotos (links)', apelidos: ['fotos', 'links das fotos'] }, { k: '_mapas', t: 'Mapas e documentos (links)', apelidos: ['mapas', 'documentos'] }],
       chaves: (x) => [norm(x.matricula)], aoCriar: (x) => { x.tipoRegistro = x.tipoRegistro || 'matricula'; x.situacao = x.situacao || 'ativa'; x.imoveis = []; x.nome = `Matrícula ${x.matricula}`; } },
     // Água e luz (23/10/2026): abas "Contratos" e "Faturas" exportadas do SisPu, com os mesmos títulos de coluna
     contratosAguaLuz: { aba: 'Contratos', titulo: 'Contrato de água ou luz', campos: [
@@ -227,6 +229,17 @@
               if (String(antes ?? '') !== String(v[c.k])) it.mudancas.push({ k: c.k, t: c.t, antes: antes ?? '', depois: v[c.k] });
             }
           }
+          if (tabela === 'matriculas' && (v._fotos || v._mapas)) {
+            const ja = new Set(((ex && ex.documentos) || []).map((d) => d.link));
+            it.docsNovos = [];
+            for (const [col, tipo] of [['_fotos', 'Foto'], ['_mapas', 'Mapa']]) for (const parte of String(v[col] || '').split(/\s*[;\n]\s*/).filter(Boolean)) {
+              const [tit, lk] = parte.includes('|') ? parte.split('|').map((y) => y.trim()) : ['', parte.trim()];
+              if (!/^https:\/\//i.test(lk)) { it.avisos.push(`Link ignorado (precisa começar com https://): ${lk.slice(0, 60)}`); continue; }
+              if (ja.has(lk)) continue;
+              ja.add(lk); it.docsNovos.push({ tipo, titulo: tit, link: lk });
+            }
+            if (ex && it.docsNovos.length) it.mudancas.push({ k: '_docs', t: 'Fotos e mapas', antes: '', depois: `+${it.docsNovos.length} link(s)` });
+          }
           it.classe = it.erros.length ? 'erro' : !ex ? 'novo' : it.mudancas.length ? 'alterado' : 'igual';
           if (it.classe === 'novo') {
             // chave repetida no mesmo arquivo: a segunda linha é erro
@@ -279,6 +292,7 @@
             if (tabela === 'itensIncorporar') Object.assign(x, { ativo: true, incorporados: 0, unidadeMedida: 'UN', liquidado: !!v.liquidado, descricao: VP.nome('produtos', x.produtoId) || pendentes.get([...mapa.entries()].find(([, id]) => id === x.produtoId)?.[0])?.nome || '' });
             if (tabela === 'contas' && !x.tipo) x.tipo = 'ativo';
             if (tabela === 'classificacoes' && x.naoDeprecia == null) x.naoDeprecia = false;
+            if (it.docsNovos?.length) x.documentos = (it.docsNovos || []).map((d) => Object.assign({ id: u.id(), em: VP.Plataforma.agoraISO(), por: VP.sessao?.usuario || '', origem: 'planilha' }, d));
             if (it.tempId) mapa.set(it.tempId, x.id);
             (grava[tabela] = grava[tabela] || []).push(x);
             reg.cadastrosNovos.push({ tabela, id: x.id });
@@ -286,7 +300,8 @@
           } else if (it.classe === 'alterado') {
             const x = VP.db.pega(tabela, it.existenteId);
             const antes = {};
-            for (const m of it.mudancas) { antes[m.k] = x[m.k] ?? null; x[m.k] = C.resolver(m.depois, mapa); }
+            for (const m of it.mudancas) { if (m.k === '_docs') continue; antes[m.k] = x[m.k] ?? null; x[m.k] = C.resolver(m.depois, mapa); }
+            if (it.docsNovos?.length) { antes.documentos = (x.documentos || []).slice(); x.documentos = (x.documentos || []).concat((it.docsNovos || []).map((d) => Object.assign({ id: u.id(), em: VP.Plataforma.agoraISO(), por: VP.sessao?.usuario || '', origem: 'planilha' }, d))); }
             if (tabela === 'classificacoes') x.nivel = v.nivel || x.nivel;
             (grava[tabela] = grava[tabela] || []).push(x);
             reg.cadastrosAlterados.push({ tabela, id: x.id, antes });

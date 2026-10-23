@@ -21,6 +21,7 @@
     dica.style.top = y + 'px';
   };
   document.addEventListener('mousemove', mostrarDica);
+  window.addEventListener('hashchange', () => { if (dica) dica.hidden = true; }); // ao trocar de tela a dica não fica presa
   document.addEventListener('focusin', (ev) => {
     const alvo = ev.target.closest && ev.target.closest('[data-dica]');
     if (!alvo) return;
@@ -107,6 +108,59 @@
         <span class="barra-valor">${esc(VP.u.pct(d.a / tot))}</span></div>`;
     }).join('');
     return legenda + `<div class="grafico-barrasH">${linhas}</div>`;
+  };
+
+  // Legenda de séries (cor + nome; a cor nunca fica sozinha: o nome está sempre escrito)
+  G.legenda = (nomes) => `<div class="legenda">${nomes.map((n, i) => `<span><i class="serie-${i + 1}"></i>${esc(n)}</span>`).join('')}</div>`;
+
+  // Colunas empilhadas — partes de um total ao longo do tempo (ex.: água + luz por mês). 2 px de folga entre as partes.
+  // dados: [{ rotulo, partes: [a, b, …], link? }]; nomes: nome de cada parte (mesma ordem e mesma cor em todo o sistema)
+  G.colunasEmpilhadas = (dados, nomes, op = {}) => {
+    const fmt = op.formato || fmtPadrao;
+    const total = (d) => d.partes.reduce((t, v) => t + (v || 0), 0);
+    if (!dados.length || dados.every((d) => !total(d))) return '<p class="vazio">Sem dados para este gráfico.</p>';
+    // largura do desenho acompanha a tela (no celular o texto do eixo não fica miúdo)
+    const W = op.largura || Math.min(1000, Math.max(360, (window.innerWidth || 1000) - 300)), H = op.altura || (W < 600 ? 220 : 260), mE = 84, mD = 6, mT = 14, mB = 26, folga = 2;
+    const max = Math.max(...dados.map(total), 1);
+    const passo = (W - mE - mD) / dados.length;
+    const larg = Math.max(6, Math.min(44, passo - 8));
+    const esc_y = (v) => (H - mT - mB) * v / max;
+    const grade = [0, 0.5, 1].map((f) => { const yy = H - mB - esc_y(max * f); return `<line x1="${mE}" x2="${W - mD}" y1="${yy}" y2="${yy}" class="grade"/><text x="${mE - 6}" y="${yy + 4}" text-anchor="end" class="eixo">${esc(op.formatoEixo ? op.formatoEixo(max * f) : fmt(max * f))}</text>`; }).join('');
+    const pular = Math.ceil(dados.length / Math.max(4, Math.floor(W / 52)));
+    const cols = dados.map((d, i) => {
+      const x = mE + i * passo + (passo - larg) / 2;
+      let base = H - mB;
+      const vis = d.partes.map((v, k) => [v || 0, k]).filter(([v]) => v > 0);
+      const segs = vis.map(([v, k], j) => {
+        const h = Math.max(0, esc_y(v) - (j < vis.length - 1 ? folga : 0));
+        const topo = base - h;
+        const ultimo = j === vis.length - 1, rx = ultimo ? Math.min(4, larg / 2, h) : 0;
+        const path = h <= 0 ? '' : ultimo ? `M${x},${base} V${topo + rx} Q${x},${topo} ${x + rx},${topo} H${x + larg - rx} Q${x + larg},${topo} ${x + larg},${topo + rx} V${base} Z` : `M${x},${base} V${topo} H${x + larg} V${base} Z`;
+        base = topo - (j < vis.length - 1 ? folga : 0);
+        return path ? `<path d="${path}" class="coluna s${k + 1}"/>` : '';
+      }).join('');
+      const tip = `<b>${esc(d.rotulo)}</b>${nomes.map((n, k) => `<br>${esc(n)}: ${esc(fmt(d.partes[k] || 0))}`).join('')}<br>Total: ${esc(fmt(total(d)))}`;
+      const abre = d.link ? `<a href="${esc(d.link)}" tabindex="0" data-dica="${esc(tip)}">` : `<g tabindex="0" data-dica="${esc(tip)}">`;
+      return `${abre}<rect x="${mE + i * passo}" y="${mT}" width="${passo}" height="${H - mT - mB}" class="alvo"/>${segs}${i % pular === 0 ? `<text x="${x + larg / 2}" y="${H - 10}" text-anchor="middle" class="eixo">${esc(d.rotulo)}</text>` : ''}${d.link ? '</a>' : '</g>'}`;
+    }).join('');
+    return G.legenda(nomes) + `<svg class="grafico-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(op.titulo || 'Gráfico de colunas')}">${grade}<line x1="${mE}" x2="${W - mD}" y1="${H - mB}" y2="${H - mB}" class="base"/>${cols}</svg>`;
+  };
+
+  // Barras horizontais empilhadas — comparar categorias com as partes (ex.: secretarias: água + luz). Clique leva ao link da linha.
+  G.barrasEmpilhadas = (dados, nomes, op = {}) => {
+    const fmt = op.formato || fmtPadrao;
+    const total = (d) => d.partes.reduce((t, v) => t + (v || 0), 0);
+    const lista = dados.filter((d) => total(d) > 0).slice(0, op.limite || 15);
+    if (!lista.length) return '<p class="vazio">Sem dados para este gráfico.</p>';
+    const max = Math.max(...lista.map(total), 1);
+    const linhas = lista.map((d) => {
+      const tip = `<b>${esc(d.rotulo)}</b>${nomes.map((n, k) => `<br>${esc(n)}: ${esc(fmt(d.partes[k] || 0))}`).join('')}<br>Total: ${esc(fmt(total(d)))}`;
+      const rot = d.link ? `<a href="${esc(d.link)}">${esc(d.rotulo)}</a>` : esc(d.rotulo);
+      return `<div class="barra-linha" tabindex="0" data-dica="${esc(tip)}"><span class="barra-rotulo" title="${esc(d.rotulo)}">${rot}</span>
+        <span class="barra-trilho multi">${d.partes.map((v, k) => (v > 0 ? `<span class="barra s${k + 1}" style="width:${(v / max) * 100}%"></span>` : '')).join('')}</span>
+        <span class="barra-valor">${esc(fmt(total(d)))}</span></div>`;
+    }).join('');
+    return (op.semLegenda ? '' : G.legenda(nomes)) + `<div class="grafico-barrasH" role="img" aria-label="${esc(op.titulo || 'Gráfico de barras')}">${linhas}</div>`;
   };
 
   // Medidor simples (barra de progresso com texto)

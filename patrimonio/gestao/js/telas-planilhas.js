@@ -640,6 +640,15 @@
   };
 
   const CLASSE = { gravado: ['im-neutro', 'Já gravado'], novo: ['im-bom', 'Novo'], igual: ['im-neutro', 'Igual (nada muda)'], alterado: ['im-regular', 'Alterado'], erro: ['im-ruim', 'Erro'] };
+  // resumo do que cada importação gravou: bens e cada cadastro (matrículas, contratos, faturas…)
+  const oQueEntrou = (h) => {
+    const n = new Map();
+    const soma = (nome, q) => { if (q) n.set(nome, (n.get(nome) || 0) + q); };
+    soma('Bens', h.novos.length + h.alterados.length);
+    soma('Itens de controle', (h.controleNovos || []).length + (h.controleAlterados || []).length);
+    for (const c of (h.cadastrosNovos || []).concat(h.cadastrosAlterados || [])) soma(VP.importaCadastros?.DEF[c.tabela]?.aba || c.tabela, 1);
+    return [...n].map(([k, q]) => `${k}: ${u.inteiro(q)}`).join(' · ');
+  };
   const telaImportar = (nav) => {
     const s = st();
     const hist = VP.db.lista('importacoesPlanilha').sort((a, b) => String(b.data).localeCompare(String(a.data)));
@@ -714,7 +723,7 @@
           ${pode() ? '<label class="botao primario">Escolher arquivo (.xlsx ou .csv)<input type="file" accept=".xlsx,.csv,.txt" data-imp-arquivo hidden></label>' : '<p class="aviso-inline">Seu acesso é só de consulta.</p>'}
         </section>
         ${corpo}
-        <section class="cartao"><h3>Importações feitas</h3>${hist.length ? `<div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Data</th><th>Arquivo</th><th>Quem</th><th class="num">Novos</th><th class="num">Alterados</th><th></th></tr></thead><tbody>${hist.map((h) => `<tr><td>${esc(new Date(h.data).toLocaleString('pt-BR'))}</td><td>${esc(h.arquivo || '')}</td><td>${esc(h.usuario || '')}</td><td class="num">${u.inteiro(h.novos.length + (h.controleNovos || []).length + (h.unidadesNovasCC || []).length)}</td><td class="num">${u.inteiro(h.alterados.length + (h.controleAlterados || []).length + (h.unidadesRenomeadas || []).length)}</td><td>${h.desfeitoEm ? `Desfeita em ${u.data(h.desfeitoEm.slice(0, 10))}` : pode() ? `<button class="botao pequeno" data-imp-desfazer="${esc(h.id)}">Desfazer</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="vazio">Nenhuma ainda.</p>'}</section>`,
+        <section class="cartao"><h3>Importações feitas</h3>${hist.length ? `<div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Data</th><th>Arquivo</th><th>Quem</th><th class="num">Novos</th><th class="num">Alterados</th><th>O que entrou</th><th></th></tr></thead><tbody>${hist.map((h) => `<tr><td>${esc(new Date(h.data).toLocaleString('pt-BR'))}</td><td>${esc(h.arquivo || '')}</td><td>${esc(h.usuario || '')}</td><td class="num">${u.inteiro(h.novos.length + (h.controleNovos || []).length + (h.unidadesNovasCC || []).length + (h.cadastrosNovos || []).length)}</td><td class="num">${u.inteiro(h.alterados.length + (h.controleAlterados || []).length + (h.unidadesRenomeadas || []).length + (h.cadastrosAlterados || []).length)}</td><td>${esc(oQueEntrou(h))}</td><td>${h.desfeitoEm ? `Desfeita em ${u.data(h.desfeitoEm.slice(0, 10))}` : pode() ? `<button class="botao pequeno" data-imp-desfazer="${esc(h.id)}">Desfazer</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="vazio">Nenhuma ainda.</p>'}</section>`,
       ligar() {
         const re = () => VP.app.render();
         document.querySelector('[data-modelo-imp]').addEventListener('click', P.baixarModelo);

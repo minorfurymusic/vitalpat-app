@@ -9,7 +9,7 @@
     ['Visão geral', [['painel', 'Painel', 'painel'], ['relatorios', 'Relatórios', 'relatorios']]],
     ['Bens', [['bens/moveis', 'Bens móveis', 'moveis'], ['bens/imoveis', 'Bens imóveis', 'imoveis'], ['frota', 'Frota', 'frota'], ['controle', 'Itens de controle', 'controle']]],
     ['Movimentações', [['entradas', 'Entradas', 'entradas'], ['transferencias', 'Transferências', 'transferencias'], ['baixa-lote', 'Baixa em lote', 'baixa'], ['termos', 'Termos', 'termos']]],
-    ['Controle', [['inventario', 'Inventário', 'inventario'], ['manutencao', 'Manutenção', 'manutencao'], ['financeiro/fechamento', 'Financeiro', 'financeiro']]],
+    ['Controle', [['inventario', 'Inventário', 'inventario'], ['manutencao', 'Manutenção', 'manutencao'], ['agualuz', 'Água e luz', 'agualuz'], ['financeiro/fechamento', 'Financeiro', 'financeiro']]],
     ['Sistema', [['historico', 'Histórico', 'historico'], ['cadastros/unidades', 'Cadastros', 'cadastros'], ['configuracoes', 'Configurações', 'configuracoes'], ['planilhas', 'Exportar e importar', 'planilhas'], ['lixeira', 'Lixeira', 'lixeira']]]
   ];
   const ICONES = {
@@ -24,6 +24,7 @@
     baixa: '<path d="M9.2 6.4 12.4 3.2l6.4 6.4-3.2 3.2z"/><path d="M12.4 9.6 4.5 17.5"/><path d="M12 21H3"/>',
     termos: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8 11h6M8 14h8"/><path d="M8 18c1-1.5 2-1.5 2.3 0 .3 1.2 1.2 1 2.2-.3"/>',
     inventario: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5h6V6H9z"/><path d="m9 13 2 2 4-4"/>',
+    agualuz: '<path d="M12 3.5s6 6.8 6 10.7a6 6 0 0 1-12 0c0-3.9 6-10.7 6-10.7z"/><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.5"/>',
     manutencao: '<path d="M19.8 8.3A4.5 4.5 0 0 1 13.2 12.7L6.2 19.7A1.32 1.32 0 0 1 4.3 17.8L11.3 10.8A4.5 4.5 0 0 1 15.7 4.2L16.2 7.8z"/>',
     financeiro: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.8"/><path d="M6 9.5v5M18 9.5v5"/>',
     historico: '<path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4.5h4.5"/><path d="M12 8v4.5l3 2"/>',
@@ -35,7 +36,7 @@
     esconder: '<path d="M15 6l-6 6 6 6"/>'
   };
   const icone = (nome) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome]}</svg>`;
-  const rotaMenu = { relatorio: 'relatorios', unidade: 'cadastros/unidades', imoveis: 'bens/imoveis' };
+  const rotaMenu = { relatorio: 'relatorios', unidade: 'cadastros/unidades', imoveis: 'bens/imoveis', matricula: 'cadastros/matriculas' };
   // Qual aba do menu acende: a ficha do bem e o "novo bem" acendem a aba do tipo do bem
   const abaDoTipo = (tipo) => (tipo === 'veiculo' ? 'frota' : ['imovel', 'infraestrutura'].includes(tipo) ? 'bens/imoveis' : 'bens/moveis');
 

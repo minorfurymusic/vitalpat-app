@@ -415,3 +415,10 @@ body.papel-consulta [data-nova-equipe], body.papel-campo [data-nova-equipe], bod
 .tabela-unir tr.difere td, .tabela-unir tr.difere th { background: color-mix(in srgb, #a35a00 10%, transparent); }
 .tabela-unir td label { display: flex; gap: 6px; align-items: flex-start; }
 .paginador { align-items: center; }
+/* Texto da matrícula (ficha da matrícula, 23/10/2026) */
+.texto-matricula { white-space: pre-wrap; max-height: 460px; overflow: auto; padding: 12px; border: 1px solid var(--borda, #d0d7de); border-radius: 6px; font-size: 0.95rem; line-height: 1.5; margin-top: 8px; }
+.texto-matricula mark { background: #ffe58a; color: #1a1a1a; }
+.busca-texto { width: min(420px, 100%); }
+/* Água e luz (23/10/2026) */
+.cartoes-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.numero-grande { font-size: 1.6rem; font-weight: 700; margin: 4px 0; }

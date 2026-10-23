@@ -198,7 +198,7 @@ VP.CONFIG_PADRAO = {
 // Nada é apagado: "excluir" marca o registro como excluído (Lixeira).
 // ---------------------------------------------------------------------------
 VP.COLECOES = ['bens', 'eventos', 'unidades', 'responsaveis', 'classificacoes', 'produtos', 'contas', 'fornecedores',
-  'motivos', 'entidades', 'comissoes', 'seguradoras', 'tiposGarantia', 'itensIncorporar', 'transferencias', 'matriculas',
+  'motivos', 'entidades', 'comissoes', 'seguradoras', 'tiposGarantia', 'itensIncorporar', 'transferencias', 'matriculas', 'contratosAguaLuz', 'faturasAguaLuz',
   'inventarios', 'fechamentos', 'reavaliacoes', 'exportacoes', 'filtrosSalvos', 'meta', 'registrosCampo',
   // Frota (veículo próprio continua em "bens")
   'veiculosLocados', 'abastecimentos', 'viagens', 'contratosLocacao', 'motoristas', 'planosManutencao', 'multas', 'documentosVeiculo',

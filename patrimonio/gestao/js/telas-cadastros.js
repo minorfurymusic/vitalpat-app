@@ -55,10 +55,15 @@
       { chave: 'tipo', rotulo: 'Tipo', tipo: 'select', opcoes: VP.TIPOS_UNIDADE.map((x) => [x, x]), largura: 'meia' },
       { chave: 'responsavelId', rotulo: 'Responsável', tipo: 'select', opcoes: opc('responsaveis'), largura: 'meia', ajuda: seVazio('responsaveis', 'Nenhum responsável cadastrado. Cadastre a pessoa em Cadastros → Responsáveis (nome, matrícula, cargo).') },
       { chave: 'entidadeId', rotulo: 'Entidade / órgão (dono dos bens desta unidade)', tipo: 'select', opcoes: opc('entidades'), ajuda: 'A prefeitura ou o fundo (Saúde, Educação, Previdência…) em nome de quem os bens são comprados.' + (seVazio('entidades', ' Nenhuma cadastrada: cadastre em Cadastros → Entidades e fundos (nome e CNPJ).') || '') },
-      { chave: 'logradouro', rotulo: 'Logradouro' }, { chave: 'bairro', rotulo: 'Bairro', largura: 'meia' }, { chave: 'cidade', rotulo: 'Cidade', largura: 'meia' }],
-    colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'nome', titulo: 'Nome', html: (x) => `<a href="#unidade/${esc(x.id)}">${esc(x.nome)}</a>`, valor: (x) => x.nome }, { chave: 'tipo', titulo: 'Tipo' }, { chave: 'resp', titulo: 'Responsável', valor: (x) => VP.nome('responsaveis', x.responsavelId) }, { chave: 'bens', titulo: 'Bens', num: true, valor: (x) => VP.db.lista('bens').filter((b) => b.unidadeId === x.id && b.status !== 'baixado').length }, { chave: 'bairro', titulo: 'Bairro' }], uso: (x) => VP.db.lista('bens').filter((b) => b.unidadeId === x.id).length },
-    responsaveis: { titulo: 'Responsáveis', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'matricula', rotulo: 'Matrícula', largura: 'meia' }, { chave: 'cargo', rotulo: 'Cargo', largura: 'meia' }, { chave: 'documento', rotulo: 'CPF (fica mascarado nas telas)', largura: 'meia' }, { chave: 'email', rotulo: 'E-mail', largura: 'meia' }],
-      colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'cargo', titulo: 'Cargo' }, { chave: 'doc', titulo: 'CPF', valor: (x) => (x.documento ? '***.' + String(x.documento).replace(/\D/g, '').slice(3, 6) + '.***-**' : '') }, { chave: 'bens', titulo: 'Bens', num: true, valor: (x) => VP.db.lista('bens').filter((b) => b.responsavelId === x.id && b.status !== 'baixado').length }], uso: (x) => VP.db.lista('bens').filter((b) => b.responsavelId === x.id).length },
+      { chave: 'logradouro', rotulo: 'Logradouro' }, { chave: 'bairro', rotulo: 'Bairro', largura: 'meia' }, { chave: 'cidade', rotulo: 'Cidade', largura: 'meia' },
+      { chave: 'secretaria', rotulo: 'Secretaria', largura: 'meia' }, { chave: 'cep', rotulo: 'CEP', largura: 'meia' },
+      { chave: 'email', rotulo: 'E-mail', largura: 'meia' }, { chave: 'telefone', rotulo: 'Telefone', largura: 'meia' },
+      { chave: 'responsavel2Id', rotulo: 'Responsável 2', tipo: 'select', opcoes: opc('responsaveis'), largura: 'meia' },
+      { chave: 'vinculo', rotulo: 'Situação do local (próprio, cedido, alugado…)', largura: 'meia' },
+      { chave: 'predio', rotulo: 'Prédio onde fica', largura: 'meia' }, { chave: 'observacao', rotulo: 'Observação', largura: 'meia' }],
+    colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'nome', titulo: 'Nome', html: (x) => `<a href="#unidade/${esc(x.id)}">${esc(x.nome)}</a>`, valor: (x) => x.nome }, { chave: 'tipo', titulo: 'Tipo' }, { chave: 'resp', titulo: 'Responsável', valor: (x) => VP.nome('responsaveis', x.responsavelId) }, { chave: 'bens', titulo: 'Bens', num: true, valor: (x) => VP.db.lista('bens').filter((b) => b.unidadeId === x.id && b.status !== 'baixado').length }, { chave: 'secretaria', titulo: 'Secretaria' }, { chave: 'telefone', titulo: 'Telefone' }, { chave: 'bairro', titulo: 'Bairro' }], uso: (x) => VP.db.lista('bens').filter((b) => b.unidadeId === x.id).length },
+    responsaveis: { titulo: 'Responsáveis', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'matricula', rotulo: 'Matrícula', largura: 'meia' }, { chave: 'cargo', rotulo: 'Cargo', largura: 'meia' }, { chave: 'documento', rotulo: 'CPF (fica mascarado nas telas)', largura: 'meia' }, { chave: 'email', rotulo: 'E-mail', largura: 'meia' }, { chave: 'telefone', rotulo: 'Telefone', largura: 'meia' }],
+      colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'cargo', titulo: 'Cargo' }, { chave: 'email', titulo: 'E-mail' }, { chave: 'doc', titulo: 'CPF', valor: (x) => (x.documento ? '***.' + String(x.documento).replace(/\D/g, '').slice(3, 6) + '.***-**' : '') }, { chave: 'bens', titulo: 'Bens', num: true, valor: (x) => VP.db.lista('bens').filter((b) => b.responsavelId === x.id && b.status !== 'baixado').length }], uso: (x) => VP.db.lista('bens').filter((b) => b.responsavelId === x.id).length },
     classificacoes: { titulo: 'Classificações (grupo, classe, subclasse)', campos: () => [
       { chave: 'nome', rotulo: 'Nome', obrigatorio: true, largura: 'meia' }, { chave: 'codigo', rotulo: 'Código', largura: 'meia' },
       { chave: 'paiId', rotulo: 'Fica dentro de (vazio = grupo)', tipo: 'select', opcoes: VP.opcClassificacoes(), ajuda: seVazio('classificacoes', 'Ainda não há classificações: deixe vazio e esta será um grupo (ex.: Bens móveis). Depois, as classes (ex.: Cadeiras) ficam dentro dele.') || 'Vazio = esta é um grupo (ex.: Bens móveis). Para uma classe, escolha o grupo.' },
@@ -127,13 +132,15 @@
         { chave: 'proprietario', rotulo: 'Proprietário no cartório', largura: 'meia', ajuda: 'Quem é dono no cartório (Município, Estado, entidade…). Não é quem cuida do imóvel.' }, { chave: 'areaCartorio', rotulo: 'Área no cartório (m²)', tipo: 'numero', largura: 'meia', ajuda: 'A área que vale (oficial).' },
         { chave: 'area', rotulo: 'Área na planilha (m²)', tipo: 'numero', largura: 'meia' }, { chave: 'areaCelula', rotulo: 'Área: célula original', largura: 'meia', ajuda: 'Quando a planilha tinha dois números na mesma célula.' },
         { chave: 'lat', rotulo: 'Latitude', tipo: 'numero', largura: 'meia' }, { chave: 'lon', rotulo: 'Longitude', tipo: 'numero', largura: 'meia' },
+        { chave: 'pdfLinks', rotulo: 'PDF da matrícula (link)', ajuda: 'Link do Drive (começa com https://). Mais de um: separe com ";".' },
+        { chave: 'texto', rotulo: 'Texto da matrícula', tipo: 'area', ajuda: 'O texto transcrito (TXT). Aparece na ficha para ler e procurar.' },
         { chave: 'linhasOrigem', rotulo: 'Linhas de origem (planilha da prefeitura)' }, { chave: 'avisos', rotulo: 'Avisos', tipo: 'area' }],
       antesDeSalvar: (d) => { d.nome = `Matrícula ${d.matricula}`; d.imoveis = d.imoveis || []; },
-      colunas: [{ chave: 'matricula', titulo: 'Matrícula' }, { chave: 'tipoRegistro', titulo: 'Registro', valor: (x) => (VP.TIPOS_REGISTRO_MATRICULA.find(([k]) => k === x.tipoRegistro) || [, ''])[1] },
+      colunas: [{ chave: 'matricula', titulo: 'Matrícula', html: (x) => `<a href="#matricula/${esc(x.id)}">${esc(x.matricula)}</a>`, valor: (x) => x.matricula }, { chave: 'tipoRegistro', titulo: 'Registro', valor: (x) => (VP.TIPOS_REGISTRO_MATRICULA.find(([k]) => k === x.tipoRegistro) || [, ''])[1] },
         { chave: 'cadastrosImobiliarios', titulo: 'Cadastro imobiliário' }, { chave: 'tipoImovel', titulo: 'Tipo' },
         { chave: 'end', titulo: 'Endereço', valor: (x) => [x.logradouro, x.numeroEndereco, x.bairro].filter(Boolean).join(', ') },
         { chave: 'situacao', titulo: 'Situação', valor: (x) => (VP.SITUACOES_MATRICULA.find(([k]) => k === x.situacao) || [, ''])[1] },
-        { chave: 'proprietario', titulo: 'Dono no cartório' }, { chave: 'areaCartorio', titulo: 'Área cartório (m²)', num: true }, { chave: 'avisos', titulo: 'Avisos' }] }
+        { chave: 'proprietario', titulo: 'Dono no cartório' }, { chave: 'areaCartorio', titulo: 'Área cartório (m²)', num: true }, { chave: 'texto', titulo: 'Texto', valor: (x) => (x.texto ? 'Sim' : '') }, { chave: 'pdf', titulo: 'PDF', valor: (x) => (x.pdfLinks ? 'Sim' : '') }, { chave: 'avisos', titulo: 'Avisos' }] }
   };
   const SO_LEITURA = {
     tiposBem: { titulo: 'Tipos de bem', linhas: () => Object.entries(L.tiposBem).map(([k, n]) => ({ id: k, nome: n, qtd: VP.db.lista('bens').filter((b) => b.tipo === k).length })), colunas: [{ chave: 'nome', titulo: 'Tipo' }, { chave: 'qtd', titulo: 'Bens', num: true }] },
@@ -200,6 +207,81 @@
   };
 
   // ---------------------------------------------------------------- visão 360° da unidade (UN-01)
+  // ---------------------------------------------------------------- ficha da matrícula (23/10/2026)
+  // Texto da matrícula para ler (guardado no sistema), "Ver PDF" (o PDF fica no Drive; aqui só o link),
+  // mapas, fotos e outros documentos por link, e os bens ligados (terreno e prédios). Nada é apagado: documento removido vai para o histórico.
+  const soLink = (t) => (/^https?:\/\//i.test(String(t || '').trim()) ? String(t).trim() : '');
+  const numerosDaLista = (t) => String(t || '').split(/\s*;\s*/).map((x) => x.trim()).filter(Boolean);
+  VP.bensDaMatricula = (numero) => VP.db.lista('bens').filter((b) => numerosDaLista(b.imovel?.matricula).includes(String(numero)));
+  VP.matriculaPeloNumero = (numero) => VP.db.lista('matriculas').find((x) => String(x.matricula) === String(numero));
+  VP.linksMatriculas = (texto) => numerosDaLista(texto).map((n) => { const m = VP.matriculaPeloNumero(n); return m ? `<a href="#matricula/${esc(m.id)}">${esc(n)}</a>` : esc(n); }).join(', ');
+  const TIPOS_DOC = ['Mapa', 'Foto', 'Planta', 'Escritura', 'Documento', 'Outro'];
+  T.matricula = (id) => {
+    const x = VP.db.pega('matriculas', id);
+    if (!x) return { titulo: 'Matrícula', html: '<p class="aviso-inline">Matrícula não encontrada.</p>' };
+    const rot = (lista, v) => (lista.find(([k]) => k === v) || [, ''])[1];
+    const pdfs = numerosDaLista(x.pdfLinks).map(soLink).filter(Boolean);
+    const docs = (x.documentos || []).filter((d) => !d.removido);
+    const bens = VP.bensDaMatricula(x.matricula);
+    const pode = !VP.servidor?.ativo || VP.servidor.podeAlterar();
+    const dados = [['Tipo de registro', rot(VP.TIPOS_REGISTRO_MATRICULA, x.tipoRegistro)], ['Cartório', x.cartorio], ['Situação', rot(VP.SITUACOES_MATRICULA, x.situacao)], ['Motivo da situação', x.motivoSituacao],
+      ['Cadastro imobiliário', x.cadastrosImobiliarios], ['Tipo', x.tipoImovel], ['Endereço', [x.logradouro, x.numeroEndereco, x.bairro].filter(Boolean).join(', ')], ['Descrição', x.descricao], ['Observação', x.observacao],
+      ['Dono no cartório', x.proprietario], ['Área no cartório (m²)', x.areaCartorio != null ? String(x.areaCartorio).replace('.', ',') : ''], ['Área na planilha (m²)', x.area != null ? String(x.area).replace('.', ',') : ''],
+      ['Área: célula original', x.areaCelula], ['Coordenada', x.lat != null && x.lon != null ? `${x.lat}, ${x.lon}` : ''], ['Linhas de origem', x.linhasOrigem], ['Avisos', x.avisos]];
+    const html = `
+      <p><a href="#cadastros/matriculas">← Todas as matrículas</a></p>
+      <section class="cartao secao"><header><h3>Matrícula ${esc(x.matricula)}</h3>${pode ? '<button class="botao pequeno" data-editar-mat>Editar</button>' : ''}</header>
+        <dl class="dados">${dados.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v === '' || v == null ? '<span class="vazio">—</span>' : esc(v)}</dd>`).join('')}</dl>
+        <div class="linha-botoes">${pdfs.length ? pdfs.map((l, i) => `<a class="botao primario" href="${esc(l)}" target="_blank" rel="noopener">Ver PDF${pdfs.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('') : '<span class="ajuda">Nenhum PDF ligado. Cole o link do Drive em Editar → "PDF da matrícula (link)".</span>'}</div>
+      </section>
+      <section class="cartao secao"><header><h3>Texto da matrícula</h3></header>
+        ${x.texto ? `<input type="search" class="busca-texto" placeholder="Procurar no texto (ex.: um nome, uma área, R-5)" data-busca-texto aria-label="Procurar no texto da matrícula"> <span class="ajuda" data-achados></span>
+        <div class="texto-matricula" data-texto tabindex="0">${esc(x.texto)}</div>` : '<p class="ajuda">Ainda sem texto. Cole o texto em Editar → "Texto da matrícula", ou importe pela planilha (coluna "Texto da matrícula"). Para ver o original, use "Ver PDF".</p>'}
+      </section>
+      <section class="cartao secao"><header><h3>Mapas, fotos e outros documentos</h3>${pode ? '<button class="botao pequeno" data-novo-doc>Adicionar link</button>' : ''}</header>
+        ${docs.length ? `<ul class="lista-simples">${docs.map((d) => `<li><b>${esc(d.tipo)}</b> · <a href="${esc(soLink(d.link))}" target="_blank" rel="noopener">${esc(d.titulo || d.link)}</a>${pode ? ` <button class="botao pequeno" data-tirar-doc="${esc(d.id)}">Tirar</button>` : ''}</li>`).join('')}</ul>` : '<p class="ajuda">Nenhum documento. Por enquanto os arquivos ficam no Drive: abra o arquivo no Drive, copie o link e use "Adicionar link".</p>'}
+      </section>
+      <section class="cartao secao"><header><h3>Bens ligados (terreno e prédios)</h3></header>
+        ${bens.length ? `<ul class="lista-simples">${bens.map((b) => `<li><a href="#bem/${esc(b.id)}">${esc(b.plaqueta || b.codigo)} · ${esc(b.descricao)}</a>${b.conferenciaImportacao?.pendente ? ' <span class="ajuda">(a conferir)</span>' : ''}</li>`).join('')}</ul>` : '<p class="ajuda">Nenhum bem ligado a esta matrícula.</p>'}
+      </section>`;
+    const salvar = async (descricao) => { await VP.db.gravar('matriculas', x); ui.aviso(descricao); VP.app.render(); };
+    return {
+      titulo: `Matrícula ${x.matricula}`, html,
+      ligar() {
+        const area = document.getElementById('conteudo');
+        const caixa = area.querySelector('[data-busca-texto]');
+        if (caixa) caixa.addEventListener('input', () => {
+          const alvo = area.querySelector('[data-texto]'), t = caixa.value.trim();
+          if (!t) { alvo.innerHTML = esc(x.texto); area.querySelector('[data-achados]').textContent = ''; return; }
+          let n = 0;
+          alvo.innerHTML = esc(x.texto).replace(new RegExp(esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), (m) => { n++; return `<mark>${m}</mark>`; });
+          area.querySelector('[data-achados]').textContent = n ? `${n} achado(s)` : 'Nada achado';
+          alvo.querySelector('mark')?.scrollIntoView({ block: 'center' });
+        });
+        area.querySelector('[data-editar-mat]')?.addEventListener('click', () => ui.formulario({
+          titulo: `Editar: Matrícula ${x.matricula}`, campos: CAD.matriculas.campos(), valores: x, largura: 'media',
+          salvar: async (v) => { Object.assign(x, v); CAD.matriculas.antesDeSalvar(x); await salvar('Salvo.'); }
+        }));
+        area.querySelector('[data-novo-doc]')?.addEventListener('click', () => ui.formulario({
+          titulo: 'Adicionar link de documento', largura: 'media',
+          campos: [{ chave: 'tipo', rotulo: 'Tipo', tipo: 'select', vazio: false, opcoes: TIPOS_DOC.map((t) => [t, t]) }, { chave: 'titulo', rotulo: 'Nome (ex.: Mapa do loteamento)' },
+            { chave: 'link', rotulo: 'Link (do Drive ou outro endereço que comece com https://)', obrigatorio: true }],
+          salvar: async (v) => {
+            if (!soLink(v.link)) return 'O link precisa começar com https://';
+            x.documentos = (x.documentos || []).concat([{ id: u.id(), tipo: v.tipo, titulo: v.titulo || '', link: soLink(v.link), em: VP.Plataforma.agoraISO(), por: VP.sessao?.usuario || '' }]);
+            await salvar('Documento ligado.');
+          }
+        }));
+        area.querySelectorAll('[data-tirar-doc]').forEach((el) => el.addEventListener('click', async () => {
+          const d = (x.documentos || []).find((y) => y.id === el.dataset.tirarDoc);
+          if (!d || !await ui.confirmar(`Tirar <b>${esc(d.titulo || d.tipo)}</b> da matrícula? O registro fica no histórico.`, { sim: 'Tirar', classe: 'perigo' })) return;
+          d.removido = true; d.removidoEm = VP.Plataforma.agoraISO();
+          await salvar('Documento tirado (fica no histórico).');
+        }));
+      }
+    };
+  };
+
   T.unidade = (id) => {
     const un = VP.db.pega('unidades', id);
     if (!un) return { titulo: 'Unidade', html: '<p>Unidade não encontrada.</p>' };

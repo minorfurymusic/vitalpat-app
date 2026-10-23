@@ -33,13 +33,18 @@
       chaves: (x) => [norm(x.codigo), norm(x.nome)] },
     responsaveis: { aba: 'Responsáveis', titulo: 'Responsável', campos: [
       { k: 'nome', t: 'Nome', obrig: true }, { k: 'matricula', t: 'Matrícula' }, { k: 'cargo', t: 'Cargo' },
-      { k: 'documento', t: 'CPF', apelidos: ['cpf do responsavel'] }, { k: 'email', t: 'E-mail', apelidos: ['email'] }],
+      { k: 'documento', t: 'CPF', apelidos: ['cpf do responsavel'] }, { k: 'email', t: 'E-mail', apelidos: ['email'] }, { k: 'telefone', t: 'Telefone', apelidos: ['fone'] }],
       chaves: (x) => [x.matricula ? 'mat:' + norm(x.matricula) : '', norm(x.nome)] },
     unidades: { aba: 'Unidades', titulo: 'Unidade', campos: [
       { k: 'codigo', t: 'Código', obrig: true, apelidos: ['codigo da unidade', 'centro de custo'] }, { k: 'nome', t: 'Nome', obrig: true, apelidos: ['nome da unidade', 'descricao'] },
       { k: 'tipo', t: 'Tipo', tipo: 'opcao', opcoes: () => (VP.TIPOS_UNIDADE || []).map((x) => [x, x]) },
       { k: 'responsavelId', t: 'Responsável', tipo: 'ref', ref: 'responsaveis' }, { k: 'entidadeId', t: 'Entidade / órgão', tipo: 'ref', ref: 'entidades', apelidos: ['entidade', 'orgao'] },
-      { k: 'logradouro', t: 'Logradouro', apelidos: ['endereco', 'rua'] }, { k: 'bairro', t: 'Bairro' }, { k: 'cidade', t: 'Cidade', apelidos: ['municipio'] }],
+      { k: 'logradouro', t: 'Logradouro', apelidos: ['endereco', 'rua'] }, { k: 'bairro', t: 'Bairro' }, { k: 'cidade', t: 'Cidade', apelidos: ['municipio'] },
+      // 23/10/2026 (setores do SisPu): contato e situação do local
+      { k: 'secretaria', t: 'Secretaria' }, { k: 'cep', t: 'CEP' }, { k: 'email', t: 'E-mail', apelidos: ['email'] }, { k: 'telefone', t: 'Telefone', apelidos: ['fone'] },
+      { k: 'responsavel2Id', t: 'Responsável 2', tipo: 'ref', ref: 'responsaveis', apelidos: ['segundo responsavel'] },
+      { k: 'vinculo', t: 'Situação do local', apelidos: ['vinculo'], ajuda: 'Próprio, cedido, alugado, recebido em cessão, sem utilização…' },
+      { k: 'predio', t: 'Prédio', apelidos: ['edificio'] }, { k: 'observacao', t: 'Observação', apelidos: ['obs'] }],
       chaves: (x) => [norm(x.codigo)], chavesBusca: (x) => [norm(x.nome)], aoCriar: (x) => { x.historicoNomes = []; } },
     fornecedores: { aba: 'Fornecedores', titulo: 'Fornecedor', campos: [
       { k: 'nome', t: 'Nome', obrig: true, apelidos: ['razao social'] }, { k: 'documento', t: 'CNPJ/CPF', apelidos: ['cnpj', 'cpf'] }, { k: 'contato', t: 'Contato' }],
@@ -98,11 +103,30 @@
       { k: 'lat', t: 'Latitude', tipo: 'numero' }, { k: 'lon', t: 'Longitude', tipo: 'numero' },
       { k: 'situacao', t: 'Situação', tipo: 'opcao', opcoes: SITUACOES_MATRICULA, padrao: 'ativa' }, { k: 'motivoSituacao', t: 'Motivo da situação' },
       { k: 'proprietario', t: 'Proprietário no cartório' }, { k: 'areaCartorio', t: 'Área (m²) no cartório', tipo: 'numero' },
-      { k: 'linhasOrigem', t: 'Linhas de origem' }, { k: 'avisos', t: 'Avisos' }],
-      chaves: (x) => [norm(x.matricula)], aoCriar: (x) => { x.tipoRegistro = x.tipoRegistro || 'matricula'; x.situacao = x.situacao || 'ativa'; x.imoveis = []; x.nome = `Matrícula ${x.matricula}`; } }
+      { k: 'linhasOrigem', t: 'Linhas de origem' }, { k: 'avisos', t: 'Avisos' },
+      { k: 'pdfLinks', t: 'PDF da matrícula (link)', apelidos: ['pdf', 'link do pdf', 'pdf da matricula'] }, { k: 'texto', t: 'Texto da matrícula', apelidos: ['texto', 'txt'] }],
+      chaves: (x) => [norm(x.matricula)], aoCriar: (x) => { x.tipoRegistro = x.tipoRegistro || 'matricula'; x.situacao = x.situacao || 'ativa'; x.imoveis = []; x.nome = `Matrícula ${x.matricula}`; } },
+    // Água e luz (23/10/2026): abas "Contratos" e "Faturas" exportadas do SisPu, com os mesmos títulos de coluna
+    contratosAguaLuz: { aba: 'Contratos', titulo: 'Contrato de água ou luz', campos: [
+      { k: 'codigo', t: 'Matrícula/UC', obrig: true, apelidos: ['matricula uc', 'uc', 'matricula casan'] }, { k: 'codigosAntigos', t: 'Códigos antigos' },
+      { k: 'concessionaria', t: 'Concessionária' }, { k: 'tipoConta', t: 'Tipo de conta' }, { k: 'unidadeGestora', t: 'Unidade gestora' }, { k: 'secretaria', t: 'Secretaria' },
+      { k: 'edificio', t: 'Edifício' }, { k: 'nomeFatura', t: 'Nome na fatura' }, { k: 'endereco', t: 'Endereço' }, { k: 'situacao', t: 'Situação' }, { k: 'motivo', t: 'Motivo' },
+      { k: 'medidores', t: 'Medidores (período)' }, { k: 'primeiraFatura', t: '1ª fatura' }, { k: 'ultimaFatura', t: 'Última fatura' },
+      { k: 'nFaturas', t: 'Nº faturas', tipo: 'numero' }, { k: 'valor12m', t: 'Valor 12 meses R$', tipo: 'numero' }],
+      chaves: (x) => [norm(x.codigo)], aoCriar: (x) => { x.nome = `${x.concessionaria || ''} ${x.codigo}`.trim(); } },
+    faturasAguaLuz: { aba: 'Faturas', titulo: 'Fatura de água ou luz', campos: [
+      { k: 'mes', t: 'Mês', obrig: true }, { k: 'concessionaria', t: 'Concessionária' }, { k: 'codigo', t: 'Matrícula/UC', obrig: true }, { k: 'codigosAntigos', t: 'Códigos antigos' },
+      { k: 'unidadeGestora', t: 'Unidade gestora' }, { k: 'secretaria', t: 'Secretaria' }, { k: 'edificio', t: 'Edifício' }, { k: 'nomeFatura', t: 'Nome/endereço na fatura' },
+      { k: 'grupo', t: 'Grupo' }, { k: 'dias', t: 'Dias', tipo: 'numero' }, { k: 'consumo', t: 'Consumo (kWh/m³)', tipo: 'numero' }, { k: 'valor', t: 'Valor total R$', tipo: 'numero' },
+      { k: 'situacaoContrato', t: 'Situação do contrato' }, { k: 'energiaTE', t: 'Energia TE R$', tipo: 'numero' }, { k: 'redeTUSD', t: 'Rede TUSD R$', tipo: 'numero' },
+      { k: 'bandeira', t: 'Bandeira R$', tipo: 'numero' }, { k: 'demanda', t: 'Demanda R$', tipo: 'numero' }, { k: 'demandaContratada', t: 'Demanda contratada kW', tipo: 'numero' },
+      { k: 'demandaMedida', t: 'Demanda medida kW', tipo: 'numero' }, { k: 'ultrapassagemKW', t: 'Ultrapassagem kW', tipo: 'numero' }, { k: 'ultrapassagem', t: 'Ultrapassagem R$', tipo: 'numero' },
+      { k: 'demandaSemUsoKW', t: 'Demanda sem uso kW', tipo: 'numero' }, { k: 'demandaSemUso', t: 'Demanda sem uso R$', tipo: 'numero' }, { k: 'reativo', t: 'Reativo R$', tipo: 'numero' },
+      { k: 'minimoSemUso', t: 'Mínimo sem uso kWh', tipo: 'numero' }],
+      chaves: (x) => [norm(x.codigo + '|' + x.mes)], aoCriar: (x) => { x.nome = `Fatura ${x.codigo} ${x.mes}`; } }
   };
   // ordem de gravação: quem é usado por outro vem antes
-  C.ORDEM = ['entidades', 'contas', 'responsaveis', 'unidades', 'fornecedores', 'motivos', 'comissoes', 'seguradoras', 'tiposGarantia', 'classificacoes', 'produtos', 'vidaUtilItens', 'decisoesItens', 'itensIncorporar', 'matriculas'];
+  C.ORDEM = ['entidades', 'contas', 'responsaveis', 'unidades', 'fornecedores', 'motivos', 'comissoes', 'seguradoras', 'tiposGarantia', 'classificacoes', 'produtos', 'vidaUtilItens', 'decisoesItens', 'itensIncorporar', 'matriculas', 'contratosAguaLuz', 'faturasAguaLuz'];
   C.cj = (tabela) => 'cad:' + tabela;
   C.tabela = (cj) => String(cj).slice(4);
   C.ehCadastro = (cj) => String(cj).startsWith('cad:');
@@ -193,7 +217,7 @@
           const doc = Object.assign({}, v);
           const ex = def.chaves(doc).map((k) => k && porChave.get(k)).find(Boolean);
           it.plaqueta = limpo(v.codigo || v.matricula || (v.documento ? v.documento : '') || (tabela === 'itensIncorporar' ? (v.ordemCompra.numero ? `OC ${v.ordemCompra.numero}/${v.ordemCompra.ano}` : '') : ''));
-          it.descricao = `${def.titulo}: ${tabela === 'itensIncorporar' ? `${VP.nome('produtos', v.produtoId) || pendNome(pend, 'produtos', v.produtoId) || ''} × ${v.quantidade ?? ''}` : tabela === 'classificacoes' ? v._caminho : tabela === 'matriculas' ? [v.tipoImovel, v.logradouro, v.bairro].filter(Boolean).join(' · ') : limpo(v.nome)}`;
+          it.descricao = `${def.titulo}: ${tabela === 'itensIncorporar' ? `${VP.nome('produtos', v.produtoId) || pendNome(pend, 'produtos', v.produtoId) || ''} × ${v.quantidade ?? ''}` : tabela === 'classificacoes' ? v._caminho : tabela === 'matriculas' ? [v.tipoImovel, v.logradouro, v.bairro].filter(Boolean).join(' · ') : tabela === 'contratosAguaLuz' ? limpo(v.unidadeGestora) : tabela === 'faturasAguaLuz' ? `${limpo(v.mes)} · ${limpo(v.unidadeGestora)}` : limpo(v.nome)}`;
           if (ex && ex.excluido) it.erros.push('Já existe na Lixeira; restaure antes');
           else if (ex) {
             it.existenteId = ex.id;

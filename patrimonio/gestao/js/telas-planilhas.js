@@ -49,6 +49,10 @@
     { k: '_dataInicioDep', t: 'Data início depreciação (sistema anterior)', tipo: 'data', g: TODOS, naoExporta: true, naoModelo: true, apelidos: ['data inicio depreciacao', 'inicio depreciacao', 'inicio da depreciacao'], soNovo: true, ajuda: 'Só fica registrada no histórico do bem.' },
     { k: '_tipo', t: 'Tipo do bem', tipo: 'tipoBem', g: TODOS, naoExporta: true, naoModelo: true, apelidos: ['tipo', 'tipo de bem', 'tipo do bem'], soNovo: true, ajuda: 'Bens Móveis, Bens Imóveis, Veículo ou Bens de Domínio Público. Se vier preenchido, vale para a linha (o arquivo pode misturar tipos).' },
     { k: 'status', t: 'Situação', tipo: 'status', g: TODOS, naoExporta: true, naoModelo: true, apelidos: ['status', 'situacao do bem'], soNovo: true, ajuda: 'Disponível / Em uso, Cedido, Em desuso, Manutenção.' },
+    // 23/10/2026: bem que entra no patrimônio antes da avaliação (ex.: terrenos das matrículas, prédios do SisPu): valor R$ 0
+    // e data de aquisição pode faltar; a marca sai sozinha na primeira reavaliação ou melhoria (VP.aguardandoAvaliacao)
+    { k: '_aguardandoAvaliacao', t: 'Aguardando avaliação', tipo: 'bool', g: TODOS, naoExporta: true, soNovo: true, apelidos: ['aguardando avaliacao', 'a avaliar'], ajuda: 'Sim = o bem entra com valor R$ 0 e espera a avaliação (inventário). A data de aquisição pode ficar vazia.' },
+    { k: '_conferir', t: 'Conferência da importação', tipo: 'texto', g: TODOS, naoExporta: true, soNovo: true, apelidos: ['conferir', 'a conferir'], ajuda: 'Texto = o bem aparece na Central de pendências como "Importação aguardando conferência manual", com este motivo.' },
     { k: 'detalhes.caracteristicas', t: 'Características', tipo: 'texto', g: TODOS, apelidos: ['caracteristicas', 'especificacao', 'especificacoes'], ajuda: 'Texto livre; vai junto com o complemento do bem.' },
     { k: 'estado', t: 'Estado', tipo: 'estado', g: TODOS, ajuda: 'Novo, Ótimo, Muito bom, Bom, Regular, Ruim, Péssimo ou Imprestável (ou 8 a 1). "Inservível" vira a situação do bem.' },
     { k: 'situacaoAquisicao', t: 'Como entrou', tipo: 'opcao', opcoes: () => L.situacoesAquisicao, g: TODOS, soNovo: true, ajuda: 'Compra, Doação recebida… (aba Listas). Vazio = Compra.' },
@@ -66,6 +70,7 @@
     { k: 'veiculo.anoModelo', t: 'Ano/modelo', tipo: 'texto', g: ['veiculo'], ajuda: 'Ex.: 2022/2023.' },
     { k: 'imovel.matricula', t: 'Matrícula', tipo: 'texto', g: ['imovel'] },
     { k: 'imovel.cartorio', t: 'Cartório', tipo: 'texto', g: ['imovel'] },
+    { k: 'imovel.ligacoes', t: 'Ligações de água e luz', tipo: 'texto', g: ['imovel'], apelidos: ['ligacoes', 'ligacoes agua e luz'], ajuda: 'Matrícula CASAN e unidade CELESC, separadas por ";".' },
     { k: 'imovel.situacaoRegistro', t: 'Situação do registro', tipo: 'opcao', opcoes: () => ['Registrado', 'Em regularização', 'Sem registro', 'Posse'], g: ['imovel'] },
     { k: 'imovel.motivoPendencia', t: 'O que impede o registro', tipo: 'texto', g: ['imovel'] },
     { k: 'imovel.uso', t: 'Classificação de uso', tipo: 'opcao', opcoes: () => ['Uso comum do povo', 'Uso especial', 'Dominical'], g: ['imovel'] },
@@ -344,6 +349,11 @@
           }
           it.classe = it.erros.length ? 'erro' : it.mudancas.length ? 'alterado' : 'igual';
         } else {
+          if (v._aguardandoAvaliacao) {
+            if (v.valor == null && v._valorContabil == null) v.valor = 0;
+            if (v.dataAquisicao == null) { v.dataAquisicao = hoje(); v._dataDesconhecida = true; it.avisos.push('Aguardando avaliação: valor R$ 0; data de aquisição desconhecida (fica a de hoje, entrada no sistema)'); }
+            else it.avisos.push('Aguardando avaliação: valor R$ 0 até a avaliação');
+          }
           for (const c of P.camposDe(it.cj)) if (obrigatorio(c) && v[c.k] == null && !(c.k === 'descricao' && v.complemento)) it.erros.push(`${c.t} é obrigatória para bem novo`);
           if (v.valor == null && v._valorContabil == null) it.erros.push('Informe o Valor de aquisição ou o Valor contábil');
           if ((v.valor ?? v._valorContabil) < 0) it.erros.push('Valor negativo');
@@ -351,7 +361,7 @@
           it.classe = it.erros.length ? 'erro' : 'novo';
           // Classificador: bem novo SEM plaqueta, barato, pode ser item de controle. Só sugere; a pessoa decide na prévia.
           const valorRef = v.valor ?? v._valorContabil;
-          if (it.classe === 'novo' && !it.plaqueta && tp === 'movel' && VP.classificador && VP.controle && valorRef != null && valorRef <= VP.config().limiteControle) {
+          if (it.classe === 'novo' && !it.plaqueta && !v._aguardandoAvaliacao && tp === 'movel' && VP.classificador && VP.controle && valorRef != null && valorRef <= VP.config().limiteControle) {
             it.analise = VP.classificador.analisar({ descricao: it.descricao, valor: valorRef, classificacaoId: v.classificacaoId, tipo: tp });
             it.destino = it.analise.sugestao;
           }
@@ -469,7 +479,9 @@
           if (it.plaqueta) b.plaqueta = it.plaqueta;
           if (semCentro(v)) { b.centroCustoPendente = semCentro(v); b.responsavelId = b.responsavelId || ''; }
           if (v.status) b.status = v.status;
-          if (v._situacao) b.status = v._situacao; // "Inservível" na coluna de estado vale mais que "Disponível" na de situação
+          if (v._situacao) b.status = v._situacao;
+          if (v._aguardandoAvaliacao) { b.aguardandoAvaliacao = true; if (v._dataDesconhecida) b.dataAquisicaoDesconhecida = true; }
+          if (v._conferir) b.conferenciaImportacao = { pendente: true, motivo: v._conferir, arquivo: s.arquivo, data: VP.Plataforma.agoraISO() }; // "Inservível" na coluna de estado vale mais que "Disponível" na de situação
           for (const [k, x] of Object.entries(v)) if (/^(nf|origem|detalhes|veiculo|imovel|endereco)\./.test(k)) poe(b, k, x);
           if (v._dataInicioDep) b.detalhes.inicioDepreciacaoAnterior = v._dataInicioDep;
           if (contabil) b.detalhes.valorContabilImportado = v._valorContabil;

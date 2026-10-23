@@ -37,6 +37,8 @@
 
   // ------------------------------------------------------------- valores do bem
   // Ciclo atual = desde a incorporação ou a última reavaliação.
+  // Bem que entrou sem valor (R$ 0) esperando avaliação: deixa de estar "aguardando" na primeira reavaliação ou melhoria
+  VP.aguardandoAvaliacao = (bem) => !!bem.aguardandoAvaliacao && !VP.eventosDoBem(bem.id).some((e) => !e.cancelado && ['reavaliacao', 'agregacao'].includes(e.tipo));
   VP.saldo = (bem, ate = null) => {
     const evs = VP.eventosDoBem(bem.id).filter((e) => !ate || e.data <= ate);
     let base = 0, acumuladaCiclo = 0, acumuladaTotal = 0, agregado = 0;
@@ -65,7 +67,7 @@
       base: r2(base), residual: r2(residual), acumulada: r2(acumuladaCiclo), acumuladaTotal: r2(acumuladaTotal),
       agregado: r2(agregado), liquido, liquidoAntesDaBaixa: r2(base - acumuladaCiclo),
       vidaUtilMeses: vida, inicio, depreciavel: r2(depreciavel),
-      consumido: depreciavel > 0 ? Math.min(1, acumuladaCiclo / depreciavel) : (vida ? 1 : 0),
+      consumido: depreciavel > 0 ? Math.min(1, acumuladaCiclo / depreciavel) : (vida && !VP.aguardandoAvaliacao(bem) ? 1 : 0),
       marco, baixado
     };
   };
@@ -192,6 +194,8 @@
     if (f.responsavelId) lista = lista.filter((b) => b.responsavelId === f.responsavelId || (b.responsaveisAdicionais || []).includes(f.responsavelId));
     if (f.minha && cfg.usuarioResponsavelId) lista = lista.filter((b) => b.responsavelId === cfg.usuarioResponsavelId);
     if (f.semResponsavel) lista = lista.filter((b) => !b.responsavelId);
+    if (f.aguardando) lista = lista.filter((b) => VP.aguardandoAvaliacao(b));
+    if (f.conferir) lista = lista.filter((b) => b.conferenciaImportacao?.pendente);
     for (const k of ['cidade', 'bairro', 'logradouro']) {
       if (f[k]) { const t = u.normalizar(f[k]); lista = lista.filter((b) => u.normalizar(b.endereco?.[k] || VP.db.pega('unidades', b.unidadeId)?.[k]).includes(t)); }
     }
@@ -249,6 +253,8 @@
     const itens = VP.db.lista('itensIncorporar').filter((i) => i.ativo && (i.quantidade - (i.incorporados || 0)) > 0 && (!cfg.incorporaSoLiquidados || i.liquidado));
     add('incorporar', 'atencao', 'Itens comprados aguardando incorporação', itens.length, '#entradas');
     add('transferencias', 'atencao', 'Transferências aguardando aceite', VP.db.lista('transferencias').filter((t) => t.situacao === 'pendente').length, '#transferencias');
+    add('conferir-importacao', 'atencao', 'Importação aguardando conferência manual (vistoria do que veio de outro sistema)', bens.filter((b) => b.conferenciaImportacao?.pendente).length, '#bens?conferir=1', 'Abra cada bem, confira no local e clique em "Conferido".');
+    add('aguardando-avaliacao', 'atencao', 'Bens aguardando avaliação (entraram com valor R$ 0)', bens.filter((b) => VP.aguardandoAvaliacao(b)).length, '#bens?aguardando=1', 'O valor entra pela Reavaliação (laudo da comissão), por exemplo no inventário.');
     add('sem-responsavel', 'critico', 'Bens sem responsável', bens.filter((b) => !b.responsavelId).length, '#bens?semResponsavel=1');
     add('contabilizar', 'info', 'Movimentos financeiros a enviar para a contabilidade', VP.movimentosAContabilizar().length, '#financeiro/contabilidade');
     const inv = VP.db.lista('inventarios').find((i) => i.situacao === 'aberto');

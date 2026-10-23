@@ -9,6 +9,7 @@
   const PRODUTO = 'patrimonio';
   const cfg = window.VP_SERVIDOR_PATRIMONIO;
   const LOTE = 500;          // registros por envio
+  const LOTE_BYTES = 200000; // e no máximo ~200 KB por envio (23/10/2026: pacotes de ~700 KB com bens não chegavam ao servidor)
   const PAGINA = 1000;       // registros por leitura (limite do Supabase)
   const VALIDADE_FOTO = 12 * 3600; // link temporário das fotos: 12 horas
 
@@ -118,9 +119,20 @@
     let enviados = 0;
     try {
       for (const { col, d } of linhas) await enviarArquivos(col, d);
-      for (let i = 0; i < linhas.length; i += LOTE) {
-        const parte = linhas.slice(i, i + LOTE).map(({ col, d }) => ({ colecao: col, id: d.id, dados: paraServidor(d) }));
-        const { error } = await c.from('docs').upsert(parte, { onConflict: 'colecao,id' });
+      // pacotes por quantidade E por tamanho; falha de rede tenta de novo uma vez (gravar o mesmo registro duas vezes não duplica)
+      const pacotes = [];
+      let atual = [], bytes = 0;
+      for (const { col, d } of linhas) {
+        const r = { colecao: col, id: d.id, dados: paraServidor(d) };
+        const t = JSON.stringify(r).length;
+        if (atual.length && (atual.length >= LOTE || bytes + t > LOTE_BYTES)) { pacotes.push(atual); atual = []; bytes = 0; }
+        atual.push(r); bytes += t;
+      }
+      if (atual.length) pacotes.push(atual);
+      for (const parte of pacotes) {
+        const envia = async () => { try { return await c.from('docs').upsert(parte, { onConflict: 'colecao,id' }); } catch (e) { return { error: e }; } };
+        let { error } = await envia();
+        if (error && /fetch|network|rede/i.test(error.message || '')) ({ error } = await envia());
         if (error) throw erroDoServidor(error);
         enviados += parte.length;
         if (grande) VP.ui?.aviso(`Gravando no servidor… ${u.inteiro(enviados)} de ${u.inteiro(linhas.length)}`);

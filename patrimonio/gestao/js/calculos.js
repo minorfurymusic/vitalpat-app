@@ -274,6 +274,8 @@
     // Auditoria (26/10/2026): a mesma regra da auditoria avisa no dia a dia
     const recsAbertas = VP.db.lista('recomendacoesAuditoria').filter((r) => ['aberta', 'andamento'].includes(r.situacao));
     add('aud-recs-vencidas', 'atencao', 'Auditoria: recomendações com prazo vencido', recsAbertas.filter((r) => r.prazo && r.prazo < hoje).length, '#auditoria/recomendacoes?vencidas=1', 'Registre o andamento ou peça novo prazo (Auditoria → Recomendações).');
+    // Inventário pelo celular (26/10/2026): enviado e esperando quem aprova
+    add('inv-celular-analise', 'atencao', 'Inventários pelo celular aguardando análise', VP.db.lista('inventarios').filter((i) => i.origem === 'celular' && i.situacao === 'em-analise').length, '#inventario', 'Abra Inventário → Inventários pelo celular → Analisar. Nada muda no cadastro antes da aprovação.');
     add('aud-ocor-sem-doc', 'critico', 'Ocorrências de segurança sem boletim ou laudo', VP.db.lista('ocorrenciasSeguranca').filter((o) => !o.documento).length, '#auditoria/ocorrencias', 'Furto, dano ou sinistro precisa do boletim de ocorrência ou do laudo.');
     if (VP.manutencao) {
       const am = VP.manutencao.alertas();

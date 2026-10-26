@@ -15,7 +15,7 @@
   TR.lista = (incl = false) => VP.db.lista('termosResp', incl);
   TR.prazoDias = () => Number(VP.config().prazoTermoDias) || 15;
   TR.vencido = (t) => t.situacao === 'aguardando' && t.prazo < hoje();
-  TR.situacaoTexto = (t) => (t.situacao === 'assinado' ? 'Assinado' : t.situacao === 'cancelado' ? 'Cancelado' : TR.vencido(t) ? 'Vencido' : 'Aguardando assinatura');
+  TR.situacaoTexto = (t) => (t.situacao === 'assinado' ? (t.assinado?.eletronico ? 'Assinado na tela do celular' : 'Assinado') : t.situacao === 'recusado' ? 'Recusou assinar (com testemunha)' : t.situacao === 'em-analise' ? 'Inventário em análise' : t.situacao === 'cancelado' ? 'Cancelado' : TR.vencido(t) ? 'Vencido' : 'Aguardando assinatura');
   TR.doBem = (bemId) => TR.lista().filter((t) => t.situacao === 'aguardando' && (t.bens || []).includes(bemId));
   TR.proximoNumero = () => `${TR.lista(true).filter((t) => String(t.numero).endsWith('/' + hoje().slice(0, 4))).length + 1}/${hoje().slice(0, 4)}`;
 
@@ -44,7 +44,8 @@
     if (r.novos.length || r.cancelados.length) await VP.db.gravar('termosResp', r.novos.concat(r.cancelados));
     return r.novos;
   };
-  TR.imprimir = (t) => VP.documentos.termoResponsabilidade(t.bens.map((id) => VP.db.pega('bens', id)).filter(Boolean), t.responsavelId);
+  // Termo do celular (assinado na tela, recusa ou inventário): PDF com a assinatura e todas as citações legais
+  TR.imprimir = (t) => (t.inventarioId || t.assinaturaCelular) && VP.invCampo ? VP.invCampo.imprimirTermo(t) : VP.documentos.termoResponsabilidade(t.bens.map((id) => VP.db.pega('bens', id)).filter(Boolean), t.responsavelId);
 
   // Termo assinado: anexa no termo e em cada bem (tipo "Termo de responsabilidade assinado") e fecha a pendência
   TR.anexarAssinado = (t, depois) => ui.formulario({
@@ -98,7 +99,7 @@
     let l = TR.lista().sort((a, b) => String(b.emitidoEm).localeCompare(String(a.emitidoEm)));
     if (f.situacao === 'aguardando') l = l.filter((t) => t.situacao === 'aguardando');
     else if (f.situacao === 'vencidos') l = l.filter(TR.vencido);
-    else if (f.situacao === 'assinados') l = l.filter((t) => t.situacao === 'assinado');
+    else if (f.situacao === 'assinados') l = l.filter((t) => ['assinado', 'recusado'].includes(t.situacao));
     const ag = TR.lista().filter((t) => t.situacao === 'aguardando');
     const G = VP.graficos;
     return {

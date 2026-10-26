@@ -75,7 +75,8 @@
     const $ = (id) => document.getElementById(id);
     const lerSessao = () => { try { return JSON.parse(localStorage.getItem(CHAVE)); } catch (_) { return null; } };
     const gravarSessao = (s) => { localStorage.setItem(CHAVE, JSON.stringify(Object.assign({ desde: new Date().toISOString() }, s))); };
-    const destino = (sistema, papel) => `${sistema}/${papel === 'campo' ? 'app-campo' : 'gestao'}/`;
+    // Patrimônio: o papel campo também entra na Gestão, que no celular abre o Início rápido (26/10/2026); o cemitério segue igual
+    const destino = (sistema, papel) => `${sistema}/${papel === 'campo' && sistema !== 'patrimonio' ? 'app-campo' : 'gestao'}/`;
     const motivo = new URLSearchParams(location.search).get('motivo');
     $('erro').textContent = MENSAGENS[motivo] || '';
 

@@ -271,13 +271,15 @@
 
   // ======================================================== INVENTÁRIO (A2.3)
   T.inventario = () => {
-    const aberto = VP.db.lista('inventarios').find((i) => i.situacao === 'aberto');
-    const antigos = VP.db.lista('inventarios').filter((i) => i.situacao !== 'aberto').sort((a, b) => b.dataCorte.localeCompare(a.dataCorte));
+    // Os inventários por unidade feitos pelo celular têm cartão próprio (Inventários pelo celular)
+    const aberto = VP.db.lista('inventarios').find((i) => i.situacao === 'aberto' && i.origem !== 'celular');
+    const antigos = VP.db.lista('inventarios').filter((i) => i.situacao !== 'aberto' && i.origem !== 'celular').sort((a, b) => b.dataCorte.localeCompare(a.dataCorte));
     if (!aberto) {
       return {
         titulo: 'Inventário',
         acoes: '<button class="botao primario" data-abrir>Abrir inventário</button>',
         html: `<div class="cartao"><p>Nenhum inventário aberto. Ao abrir, o sistema tira uma "foto" de onde cada bem deveria estar (data de corte). Cada bem é conferido <b>uma vez</b>, mesmo que mude de lugar durante o inventário.</p></div>
+          ${VP.invCampo ? VP.invCampo.cartaoGestao() : ''}
           <h3>Inventários anteriores</h3>
           ${antigos.length ? `<ul class="lista-simples">${antigos.map((i) => { const p = VP.progressoInventario(i); return `<li><b>${esc(i.nome)}</b> · corte ${u.data(i.dataCorte)} · encerrado em ${u.data(i.encerradoEm)} · ${p.localizados} localizados, ${p.transferidos} em outro local, ${p.naoLocalizados} não localizados, ${p.sobras} sobras · <a href="#relatorio/inventario?id=${esc(i.id)}">Relatório</a></li>`; }).join('')}</ul>` : '<p class="vazio">Nenhum.</p>'}`,
         ligar() {
@@ -312,6 +314,7 @@
           ${G.numero('Sobras (sem cadastro)', u.inteiro(p.sobras))}
         </div>
         <section class="cartao"><h3>Progresso por unidade</h3>${G.empilhadas(porUnidade.map((x) => ({ rotulo: x.un.nome, a: x.conf, b: x.total - x.conf })), ['Conferidos', 'Faltam'])}</section>
+        ${VP.invCampo ? VP.invCampo.cartaoGestao() : ''}
         <section class="cartao"><h3>Conferir por unidade</h3>
           <ul class="lista-unidades">${porUnidade.map((x) => `<li><span><b>${esc(x.un.nome)}</b><small>${x.conf} de ${x.total} conferidos${x.chegaram ? ` · ${x.chegaram} chegaram de outro local` : ''}</small></span>${G.medidor(x.total ? x.conf / x.total : 1, '')}<button class="botao pequeno" data-conferir="${esc(x.un.id)}">Conferir</button></li>`).join('')}</ul>
         </section>`,

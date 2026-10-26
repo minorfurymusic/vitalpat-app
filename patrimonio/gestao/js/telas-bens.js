@@ -274,6 +274,7 @@
         <section class="cartao secao"><header><h3>Despesas e manutenções</h3></header>
           ${custos.length ? `<div class="resumo-linha">${G.numero('Últimos 12 meses', u.moeda(custos.filter((e) => e.data >= umAno).reduce((t, e) => t + (e.valor || 0), 0)))}${G.numero('Total registrado', u.moeda(custos.reduce((t, e) => t + (e.valor || 0), 0)))}</div>` : '<p class="vazio">Nenhuma despesa registrada.</p>'}
         </section>
+        ${VP.invCampo ? VP.invCampo.secaoFicha(b) : ''}
         ${VP.auditoria ? VP.auditoria.secaoTrilha(b) : ''}
         ${VP.anexos.secaoFicha(b)}
       </div>
@@ -292,6 +293,7 @@
         const area = document.getElementById('conteudo');
         const recarrega = () => VP.app.render();
         area.querySelectorAll('[data-editar]').forEach((el) => el.addEventListener('click', () => A.editarSecao(b, el.dataset.editar, recarrega)));
+        if (VP.invCampo) VP.invCampo.ligarFicha(b);
         area.querySelector('[data-conferido]')?.addEventListener('click', async () => {
           if (!await ui.confirmar('Confirmar que este bem foi <b>conferido</b> (vistoria feita e dados certos)?', { sim: 'Conferido' })) return;
           b.conferenciaImportacao = Object.assign({}, b.conferenciaImportacao, { pendente: false, conferidoEm: VP.Plataforma.agoraISO(), conferidoPor: VP.sessao?.usuario || '' });

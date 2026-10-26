@@ -6,13 +6,14 @@
 
   // Menu em grupos (sempre abertos). Ícones desenhados para o VitalPat: traço simples, cor do texto.
   const GRUPOS = [
-    ['Visão geral', [['painel', 'Painel', 'painel'], ['relatorios', 'Relatórios', 'relatorios']]],
+    ['Visão geral', [['campo', 'Início rápido', 'campo'], ['painel', 'Painel', 'painel'], ['relatorios', 'Relatórios', 'relatorios']]],
     ['Bens', [['bens/moveis', 'Bens móveis', 'moveis'], ['bens/imoveis', 'Bens imóveis', 'imoveis'], ['frota', 'Frota', 'frota'], ['controle', 'Itens de controle', 'controle']]],
     ['Movimentações', [['entradas', 'Entradas', 'entradas'], ['transferencias', 'Transferências', 'transferencias'], ['baixa-lote', 'Baixa em lote', 'baixa'], ['termos', 'Termos', 'termos']]],
     ['Controle', [['inventario', 'Inventário', 'inventario'], ['manutencao', 'Manutenção', 'manutencao'], ['agualuz', 'Água e luz', 'agualuz'], ['auditoria', 'Auditoria', 'auditoria'], ['financeiro/fechamento', 'Financeiro', 'financeiro']]],
     ['Sistema', [['historico', 'Histórico', 'historico'], ['cadastros/unidades', 'Cadastros', 'cadastros'], ['configuracoes', 'Configurações', 'configuracoes'], ['planilhas', 'Exportar e importar', 'planilhas'], ['lixeira', 'Lixeira', 'lixeira']]]
   ];
   const ICONES = {
+    campo: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
     painel: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     relatorios: '<path d="M3 21h18"/><rect x="4.5" y="12" width="3.5" height="9" rx="1"/><rect x="10.25" y="5" width="3.5" height="16" rx="1"/><rect x="16" y="9" width="3.5" height="12" rx="1"/>',
     moveis: '<path d="M21 7.5 12 3 3 7.5v9L12 21l9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/>',
@@ -37,12 +38,12 @@
     esconder: '<path d="M15 6l-6 6 6 6"/>'
   };
   const icone = (nome) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome]}</svg>`;
-  const rotaMenu = { relatorio: 'relatorios', 'painel-imoveis': 'relatorios', 'auditoria-processo': 'auditoria', unidade: 'cadastros/unidades', imoveis: 'bens/imoveis', matricula: 'cadastros/matriculas' };
+  const rotaMenu = { 'campo-inventarios': 'campo', 'campo-inventario': 'campo', 'campo-concluir': 'campo', 'campo-assinar': 'campo', 'campo-termo': 'campo', 'campo-consultar': 'campo', 'campo-etiquetar': 'campo', 'inventario-analise': 'inventario', relatorio: 'relatorios', 'painel-imoveis': 'relatorios', 'auditoria-processo': 'auditoria', unidade: 'cadastros/unidades', imoveis: 'bens/imoveis', matricula: 'cadastros/matriculas' };
   // Qual aba do menu acende: a ficha do bem e o "novo bem" acendem a aba do tipo do bem
   const abaDoTipo = (tipo) => (tipo === 'veiculo' ? 'frota' : ['imovel', 'infraestrutura'].includes(tipo) ? 'bens/imoveis' : 'bens/moveis');
 
   const lerRota = () => {
-    const h = location.hash.replace(/^#/, '') || 'painel';
+    const h = location.hash.replace(/^#/, '') || (VP.Plataforma.ehCelular?.() ? 'campo' : 'painel');
     const [caminho, qs] = h.split('?');
     const [tela, ...resto] = caminho.split('/');
     return { tela, param: resto.join('/') || undefined, query: Object.fromEntries(new URLSearchParams(qs || '')), caminho };
@@ -124,6 +125,11 @@
       aplicarTema(prox);
     });
     document.getElementById('abrir-menu').addEventListener('click', () => document.body.classList.toggle('menu-aberto'));
+    // Celular: o menu começa logo abaixo do topo (o topo tem altura variável no celular)
+    const alturaTopo = () => document.documentElement.style.setProperty('--altura-topo', document.querySelector('.topo').offsetHeight + 'px');
+    alturaTopo(); window.addEventListener('resize', alturaTopo);
+    // Celular: tocar fora do menu aberto fecha o menu
+    document.addEventListener('click', (e) => { if (document.body.classList.contains('menu-aberto') && !e.target.closest('#menu, #abrir-menu')) document.body.classList.remove('menu-aberto'); });
     document.getElementById('sair').addEventListener('click', async () => {
       if (VP.servidor.ativo) await VP.servidor.sair();
       try { localStorage.removeItem('vitalpat-sessao'); } catch (_) { /* nada a fazer */ }

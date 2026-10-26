@@ -13,7 +13,9 @@ VP.Plataforma = VP.Plataforma || {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   },
-  agoraISO: () => new Date().toISOString()
+  agoraISO: () => new Date().toISOString(),
+  // Tela de celular (abre no Início rápido). Trocável nos testes.
+  ehCelular: () => !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches)
 };
 
 // ---------------------------------------------------------------------------

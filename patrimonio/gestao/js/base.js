@@ -107,7 +107,7 @@ VP.u = {
 // Listas fixas (texto simples para as telas)
 // ---------------------------------------------------------------------------
 VP.LISTAS = {
-  tiposBem: { movel: 'Bem móvel', imovel: 'Bem imóvel', veiculo: 'Veículo', intangivel: 'Intangível (software, licença)', infraestrutura: 'Infraestrutura (ruas, redes, pontes)' },
+  tiposBem: { movel: 'Bem móvel', imovel: 'Bem imóvel', veiculo: 'Veículo', intangivel: 'Intangível (software, licença)', infraestrutura: 'Infraestrutura (ruas, redes, pontes)', semovente: 'Semovente (animal)' },
   status: { ativo: 'Em uso', desuso: 'Em desuso', inservivel: 'Inservível', cedido: 'Fora (cedido/emprestado)', manutencao: 'Em conserto', baixado: 'Baixado' },
   // Escala do livro de controle patrimonial + "Novo". 1 = Imprestável (vai para baixa).
   estados: { 8: 'Novo', 7: 'Ótimo', 6: 'Muito bom', 5: 'Bom', 4: 'Regular', 3: 'Ruim', 2: 'Péssimo', 1: 'Imprestável' },
@@ -200,6 +200,8 @@ VP.CONFIG_PADRAO = {
 VP.COLECOES = ['bens', 'eventos', 'unidades', 'responsaveis', 'classificacoes', 'produtos', 'contas', 'fornecedores',
   'motivos', 'entidades', 'comissoes', 'seguradoras', 'tiposGarantia', 'itensIncorporar', 'transferencias', 'matriculas', 'contratosAguaLuz', 'faturasAguaLuz',
   'inventarios', 'fechamentos', 'reavaliacoes', 'exportacoes', 'filtrosSalvos', 'meta', 'registrosCampo',
+  // Auditoria (26/10/2026)
+  'auditorias', 'papeisTrabalho', 'achadosAuditoria', 'recomendacoesAuditoria', 'conciliacoesSiafic', 'ocorrenciasSeguranca',
   // Frota (veículo próprio continua em "bens")
   'veiculosLocados', 'abastecimentos', 'viagens', 'contratosLocacao', 'motoristas', 'planosManutencao', 'multas', 'documentosVeiculo',
   // Imóveis (etapa 5)

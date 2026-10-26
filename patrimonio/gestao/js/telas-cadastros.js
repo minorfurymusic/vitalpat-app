@@ -520,12 +520,12 @@
   // ---------------------------------------------------------------- lixeira
   T.lixeira = () => {
     const itens = [];
-    for (const c of ['bens', 'bensControle', 'lotesBaixa'].concat(Object.keys(CAD), Object.keys(VP.frota?.COLECOES || {}))) for (const x of VP.db.lista(c, true).filter((d) => d.excluido)) itens.push({ id: c + '|' + x.id, col: c, x });
+    for (const c of ['bens', 'bensControle', 'lotesBaixa'].concat(Object.keys(CAD), Object.keys(VP.frota?.COLECOES || {}), Object.keys(VP.auditoria?.LIXEIRA || {}))) for (const x of VP.db.lista(c, true).filter((d) => d.excluido)) itens.push({ id: c + '|' + x.id, col: c, x });
     return {
       titulo: 'Lixeira',
       html: `<p class="ajuda">Nada é apagado de verdade. O que foi excluído fica aqui e pode voltar.</p>${ui.tabela({ id: 'lixeira', linhas: itens, nomePlanilha: 'lixeira', vazio: 'A Lixeira está vazia.', colunas: [
-        { chave: 'tipo', titulo: 'O que é', valor: (i) => (i.col === 'bens' ? 'Bem' : i.col === 'bensControle' ? 'Item de controle' : i.col === 'lotesBaixa' ? 'Lote de baixa' : CAD[i.col] ? CAD[i.col].titulo.split(' (')[0] : VP.frota.COLECOES[i.col]) },
-        { chave: 'nome', titulo: 'Nome', valor: (i) => (i.col === 'bens' || i.col === 'bensControle' ? `${i.x.codigo} · ${i.x.descricao}` : i.col === 'lotesBaixa' ? `${i.x.numero} · ${i.x.descricao}` : i.x.nome || i.x.codigo || i.x.placa || i.x.numero || i.x.item || i.x.tipo || i.x.descricao || u.data(i.x.data || i.x.saida)) },
+        { chave: 'tipo', titulo: 'O que é', valor: (i) => (i.col === 'bens' ? 'Bem' : i.col === 'bensControle' ? 'Item de controle' : i.col === 'lotesBaixa' ? 'Lote de baixa' : CAD[i.col] ? CAD[i.col].titulo.split(' (')[0] : VP.auditoria?.LIXEIRA[i.col] || VP.frota.COLECOES[i.col]) },
+        { chave: 'nome', titulo: 'Nome', valor: (i) => (VP.auditoria?.LIXEIRA[i.col] ? VP.auditoria.nomeNaLixeira(i.col, i.x) : i.col === 'bens' || i.col === 'bensControle' ? `${i.x.codigo} · ${i.x.descricao}` : i.col === 'lotesBaixa' ? `${i.x.numero} · ${i.x.descricao}` : i.x.nome || i.x.codigo || i.x.placa || i.x.numero || i.x.item || i.x.tipo || i.x.descricao || u.data(i.x.data || i.x.saida)) },
         { chave: 'quando', titulo: 'Excluído em', valor: (i) => u.data(i.x.excluidoEm) },
         { chave: 'acao', titulo: '', html: (i) => `<button class="botao pequeno" data-restaurar-item="${esc(i.id)}">Restaurar</button>` }] })}`,
       ligar() {

@@ -469,9 +469,22 @@ body.papel-consulta [data-nova-equipe], body.papel-campo [data-nova-equipe], bod
 .legenda-ponto i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .legenda-ponto .serie-1 { background: var(--serie-1); } .legenda-ponto .serie-2 { background: var(--serie-2); }
 .tabela-painel th, .tabela-painel td { padding: 8px; vertical-align: top; }
-.painel-filtros select { font: inherit; font-size: 0.95rem; color: var(--texto); background: var(--superficie); border: 1px solid var(--borda); border-radius: 8px; padding: 7px 10px; }
+.painel-filtros select, .painel-filtros input { font: inherit; font-size: 0.95rem; color: var(--texto); background: var(--superficie); border: 1px solid var(--borda); border-radius: 8px; padding: 7px 10px; }
 .cartao-relatorio.painel-destaque { border-left: 4px solid var(--dourado); }
 /* Relatórios abrem com o botão "Gerar" e explicam quando não há dados (23/10/2026) */
 .gerar-relatorio { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 14px 0; padding: 16px; border: 1px dashed var(--borda); border-radius: var(--raio); background: var(--superficie); }
 .aviso-vazio { margin: 14px 0; padding: 14px 16px; border-radius: var(--raio); border: 1px solid var(--borda); border-left: 4px solid var(--atencao); background: var(--superficie); }
 .aviso-vazio p { margin: 6px 0; }
+/* Auditoria (26/10/2026) */
+.selo-ok { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--texto); border: 1px solid var(--ok); }
+.selo-info { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: var(--primaria-clara); color: var(--texto); border: 1px solid var(--borda); }
+.teste-aud { margin: 10px 0; }
+.teste-aud header { display: flex; justify-content: space-between; gap: 10px; align-items: start; flex-wrap: wrap; }
+.teste-aud h3 { font-size: 1rem; margin: 0; }
+.teste-aud.com-casos { border-left: 4px solid var(--atencao); }
+.versao { border-top: 1px solid var(--borda); padding-top: 8px; margin-top: 8px; }
+.versao h4 { margin: 4px 0; font-size: 0.95rem; }
+/* Consulta e Auditor não gravam fora da Auditoria: esconde os botões que o banco recusaria (revisão de 26/10/2026) */
+body.papel-consulta [data-novo-item], body.papel-consulta [data-importar-itens], body.papel-consulta #acoes-tela a[href="#novo-bem"],
+body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].grande, body.papel-consulta label:has(> input[data-importar-cad]) { display: none !important; }
+

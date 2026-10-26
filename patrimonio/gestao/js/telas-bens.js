@@ -274,6 +274,7 @@
         <section class="cartao secao"><header><h3>Despesas e manutenções</h3></header>
           ${custos.length ? `<div class="resumo-linha">${G.numero('Últimos 12 meses', u.moeda(custos.filter((e) => e.data >= umAno).reduce((t, e) => t + (e.valor || 0), 0)))}${G.numero('Total registrado', u.moeda(custos.reduce((t, e) => t + (e.valor || 0), 0)))}</div>` : '<p class="vazio">Nenhuma despesa registrada.</p>'}
         </section>
+        ${VP.auditoria ? VP.auditoria.secaoTrilha(b) : ''}
         ${VP.anexos.secaoFicha(b)}
       </div>
       <section class="cartao secao linha-do-tempo-cartao">
@@ -364,6 +365,7 @@
         ligarEstorno(b);
         if (VP.imoveis && (b.tipo === 'imovel' || b.imovel)) VP.imoveis.ligarFicha(b, recarrega);
         VP.anexos.ligarFicha(b, recarrega);
+        if (VP.auditoria) VP.auditoria.ligarTrilha(b);
       }
     };
   };
@@ -424,6 +426,7 @@
       { chave: 'detalhes.marca', rotulo: 'Marca', largura: 'meia' }, { chave: 'detalhes.modelo', rotulo: 'Modelo', largura: 'meia' },
       { chave: 'detalhes.cor', rotulo: 'Cor', largura: 'meia' }, { chave: 'detalhes.serie', rotulo: 'Número de série', largura: 'meia' },
       { chave: 'detalhes.rfid', rotulo: 'RFID' },
+      { chave: 'detalhes.identificacao', rotulo: 'Identificação do animal (chip, brinco) — semoventes', largura: 'meia' }, { chave: 'detalhes.vigenciaFim', rotulo: 'Vigência até (licença, direito) — intangíveis', tipo: 'data', largura: 'meia' },
       { chave: 'detalhes.textoJuridico.categoria', rotulo: 'Texto jurídico: categoria', largura: 'meia' }, { chave: 'detalhes.textoJuridico.numeroAno', rotulo: 'Número/ano', largura: 'meia' },
       { chave: '_medidas', rotulo: 'Medidas (uma por linha: nome = valor)', tipo: 'area', ajuda: 'Ex.: Área construída (m²) = 850' }] },
     imovel: { titulo: 'Imóvel: documentos e uso', campos: [
@@ -562,7 +565,8 @@
   T['novo-bem'] = (tipoParam) => {
     const tipo = L.tiposBem[tipoParam] ? tipoParam : 'movel';
     const cfg = VP.config();
-    const nomeTipo = { movel: 'bem móvel', imovel: 'bem imóvel', veiculo: 'veículo (patrimônio)', intangivel: 'bem intangível', infraestrutura: 'bem de infraestrutura' }[tipo];
+    const nomeTipo = { movel: 'bem móvel', imovel: 'bem imóvel', veiculo: 'veículo (patrimônio)', intangivel: 'bem intangível', infraestrutura: 'bem de infraestrutura', semovente: 'semovente (animal)' }[tipo];
+    if (VP.servidor?.ativo && !VP.servidor.podeAlterar()) return { titulo: 'Novo bem', html: '<p class="aviso-inline">Seu papel só consulta: cadastrar bens é do administrador ou do gestor.</p>' };
     // Lista vazia: diz onde cadastrar (os dados vêm da prefeitura; ver Painel → pendências)
     const faltaCadastro = (tabela, nome, aba) => (VP.db.lista(tabela).length ? '' : `Nenhum ${nome} cadastrado. Cadastre em Cadastros → ${aba} (dados a receber da prefeitura).`);
     const campos = [

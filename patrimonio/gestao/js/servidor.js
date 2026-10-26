@@ -34,10 +34,11 @@
   VP.servidor.entrar = async () => {
     const { data: s } = await c.auth.getSession();
     if (!s.session) return voltarAoLogin('expirou');
-    const { data: p, error } = await c.from('perfis').select('nome, email, papel, ativo').eq('user_id', s.session.user.id).maybeSingle();
+    const { data: p, error } = await c.from('perfis').select('nome, email, papel, ativo, acesso_ate').eq('user_id', s.session.user.id).maybeSingle();
     if (error) throw erroDoServidor(error);
     if (!p) return voltarAoLogin('sem-acesso');
     if (!p.ativo) return voltarAoLogin('inativo');
+    if (p.acesso_ate && p.acesso_ate < VP.Plataforma.hoje()) return voltarAoLogin('inativo'); // acesso com data de fim (ex.: auditor externo)
     const { data: inst, error: e2 } = await c.from('instalacao').select('produto, municipio, uf').maybeSingle();
     if (e2) throw erroDoServidor(e2);
     if (inst && inst.produto !== PRODUTO) throw erroDoServidor(new Error('Este banco não é do sistema do patrimônio. Confira o arquivo config-servidor.js.'));
@@ -45,11 +46,33 @@
     if (inst) VP.servidor.municipio = `${inst.municipio}/${inst.uf}`;
     VP.sessao = Object.assign({}, VP.sessao, { usuario: p.nome || p.email, papel: p.papel });
     document.body.classList.add('papel-' + p.papel);
+    if (p.papel === 'auditor') document.body.classList.add('papel-consulta'); // auditor não altera cadastros: a tela esconde os botões como na consulta
     c.auth.onAuthStateChange((evento, sessao) => { if (!saindo && (evento === 'SIGNED_OUT' || !sessao)) voltarAoLogin('expirou'); });
   };
   let saindo = false; // Sair de propósito não é "sessão terminou"
   VP.servidor.sair = async () => { saindo = true; await c.auth.signOut().catch(() => {}); };
   VP.servidor.podeAlterar = () => ['admin', 'gestor'].includes(VP.servidor.perfil?.papel);
+  // Auditoria (26/10/2026): admin, gestor e auditor gravam na área de auditoria; o auditor só lá (regra também no banco)
+  VP.servidor.podeAuditar = () => ['admin', 'gestor', 'auditor'].includes(VP.servidor.perfil?.papel);
+  // Trilha: todas as versões gravadas de um registro (tabela "historico", que o banco não deixa apagar nem alterar)
+  VP.servidor.historico = async (colecao, id) => {
+    const { data, error } = await c.from('historico').select('seq, versao, dados_anteriores, dados_novos, alterado_em, alterado_por').eq('colecao', colecao).eq('id', id).order('seq');
+    if (error) throw erroDoServidor(error);
+    return data || [];
+  };
+  // trilha de um período (pacote para órgãos de controle): até 20 mil alterações, da mais antiga para a mais nova
+  VP.servidor.trilhaPeriodo = async (de, ate) => {
+    let q = c.from('historico').select('seq, colecao, id, versao, alterado_em, alterado_por').order('seq').limit(20000);
+    if (de) q = q.gte('alterado_em', de); if (ate) q = q.lte('alterado_em', ate + 'T23:59:59');
+    const { data, error } = await q;
+    if (error) throw erroDoServidor(error);
+    return data || [];
+  };
+  // nomes de quem alterou (só o administrador lê a lista de pessoas; para os outros, aparece o código)
+  VP.servidor.nomesPessoas = async () => {
+    const { data } = await c.from('perfis').select('user_id, nome, email');
+    return Object.fromEntries((data || []).map((x) => [x.user_id, x.nome || x.email]));
+  };
 
   // ------------------------------------------------------------------ fotos e anexos
   // Na tela continuam como "dataURL"; no servidor vão para o armazenamento "arquivos" e o registro guarda só o caminho.
@@ -156,7 +179,7 @@
   window.addEventListener('unhandledrejection', (e) => { if (e.reason && e.reason.vpServidor) e.preventDefault(); });
 
   // ------------------------------------------------------------------ tela Pessoas (só administrador)
-  const PAPEIS = { admin: 'Administrador (tudo, inclusive pessoas)', gestor: 'Gestor (cadastra e altera)', campo: 'Campo (inventário, vistorias, abastecimento)', consulta: 'Consulta (só vê)' };
+  const PAPEIS = { admin: 'Administrador (tudo, inclusive pessoas)', gestor: 'Gestor (cadastra e altera)', campo: 'Campo (inventário, vistorias, abastecimento)', consulta: 'Consulta (só vê)', auditor: 'Auditor (vê tudo e o histórico; só grava na Auditoria)' };
   VP.telas = VP.telas || {};
   VP.telas.pessoas = () => {
     if (VP.servidor.perfil?.papel !== 'admin') return { titulo: 'Pessoas', html: '<p class="aviso-inline">Só o administrador vê esta tela.</p>' };
@@ -166,11 +189,12 @@
       html: `<p class="ajuda">Para cadastrar alguém: no Supabase, Authentication → Users → Add user (e-mail e senha). A pessoa aparece aqui como <b>aguardando liberação</b>; escolha o papel e libere. Ninguém é apagado: para tirar o acesso, desative.</p><div id="area-pessoas"><p>Carregando…</p></div>`,
       async ligar() {
         const area = document.getElementById('area-pessoas');
-        const { data, error } = await c.from('perfis').select('user_id, nome, email, papel, ativo, criado_em').order('ativo').order('nome');
+        const { data, error } = await c.from('perfis').select('user_id, nome, email, papel, ativo, acesso_ate, criado_em').order('ativo').order('nome');
         if (error) { area.innerHTML = '<p class="aviso-inline">Não foi possível ler a lista de pessoas.</p>'; return; }
         area.innerHTML = ui.tabela({ id: 'pessoas', linhas: data.map((x) => Object.assign({ id: x.user_id }, x)), nomePlanilha: 'pessoas', colunas: [
           { chave: 'nome', titulo: 'Nome' }, { chave: 'email', titulo: 'E-mail' },
           { chave: 'papel', titulo: 'Papel', valor: (x) => PAPEIS[x.papel] || x.papel },
+          { chave: 'acesso_ate', titulo: 'Acesso até', valor: (x) => (x.acesso_ate ? u.data(x.acesso_ate) : 'sem data de fim') },
           { chave: 'ativo', titulo: 'Situação', html: (x) => (x.ativo ? '<span class="selo-status s-ativo">Ativo</span>' : '<span class="selo-status t-pendente">Aguardando liberação / desativado</span>'), valor: (x) => (x.ativo ? 'Ativo' : 'Inativo') },
           { chave: 'a', titulo: '', html: (x) => `<button class="botao pequeno" data-pessoa="${esc(x.user_id)}">Alterar</button>` }] });
         ui.ligarTabela('pessoas');
@@ -178,9 +202,9 @@
           const b = e.target.closest('[data-pessoa]'); if (!b) return;
           const x = data.find((y) => y.user_id === b.dataset.pessoa);
           ui.formulario({ titulo: 'Acesso de ' + (x.nome || x.email), largura: 'pequena', valores: x,
-            campos: [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'papel', rotulo: 'Papel', tipo: 'select', opcoes: Object.entries(PAPEIS), vazio: false }, { chave: 'ativo', rotulo: 'Acesso liberado', tipo: 'bool' }],
+            campos: [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'papel', rotulo: 'Papel', tipo: 'select', opcoes: Object.entries(PAPEIS), vazio: false }, { chave: 'ativo', rotulo: 'Acesso liberado', tipo: 'bool' }, { chave: 'acesso_ate', rotulo: 'Acesso até (vazio = sem data de fim)', tipo: 'data', ajuda: 'Use para auditor de fora (Tribunal de Contas, auditoria externa): no dia seguinte o acesso acaba sozinho.' }],
             salvar: async (v) => {
-              const { error: e2 } = await c.from('perfis').update({ nome: v.nome, papel: v.papel, ativo: v.ativo }).eq('user_id', x.user_id);
+              const { error: e2 } = await c.from('perfis').update({ nome: v.nome, papel: v.papel, ativo: v.ativo, acesso_ate: v.acesso_ate || null }).eq('user_id', x.user_id);
               if (e2) return /administrador ativo/.test(e2.message) ? 'É preciso ter pelo menos um administrador ativo.' : 'Não foi possível salvar.';
               ui.aviso('Acesso atualizado.'); VP.app.render();
             } });

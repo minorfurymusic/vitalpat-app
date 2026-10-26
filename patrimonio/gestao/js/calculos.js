@@ -271,6 +271,10 @@
       add('imo-pend', 'atencao', 'Imóveis: pendências de regularização atrasadas', ai.pendAtrasadas.length, '#imoveis/pendencias');
       add('imo-motivo', 'info', 'Imóveis não registrados sem o motivo informado (TCE/SC)', ai.semMotivo.length, '#imoveis');
     }
+    // Auditoria (26/10/2026): a mesma regra da auditoria avisa no dia a dia
+    const recsAbertas = VP.db.lista('recomendacoesAuditoria').filter((r) => ['aberta', 'andamento'].includes(r.situacao));
+    add('aud-recs-vencidas', 'atencao', 'Auditoria: recomendações com prazo vencido', recsAbertas.filter((r) => r.prazo && r.prazo < hoje).length, '#auditoria/recomendacoes?vencidas=1', 'Registre o andamento ou peça novo prazo (Auditoria → Recomendações).');
+    add('aud-ocor-sem-doc', 'critico', 'Ocorrências de segurança sem boletim ou laudo', VP.db.lista('ocorrenciasSeguranca').filter((o) => !o.documento).length, '#auditoria/ocorrencias', 'Furto, dano ou sinistro precisa do boletim de ocorrência ou do laudo.');
     if (VP.manutencao) {
       const am = VP.manutencao.alertas();
       add('cham-atrasados', 'atencao', 'Chamados de manutenção atrasados', am.atrasados.length, '#manutencao/chamados?abertos=1&atrasados=1');

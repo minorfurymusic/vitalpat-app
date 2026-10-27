@@ -132,7 +132,8 @@
   IC.lista = (incl = false) => VP.db.lista('inventarios', incl).filter((i) => i.origem === 'celular');
   IC.abertos = () => IC.lista().filter((i) => i.situacao === 'aberto');
   IC.emAnalise = () => IC.lista().filter((i) => i.situacao === 'em-analise');
-  IC.situacaoTexto = (i) => ({ aberto: 'aberto', 'em-analise': 'em análise', encerrado: 'aprovado' }[i.situacao] || i.situacao);
+  IC.situacaoTexto = (i) => (i.situacao === 'aberto' && i.pendenteResposta ? (i.pendenteResposta.tipo === 'recusa' ? 'recusado, aguardando correção' : 'esclarecimento pedido, aguardando resposta')
+    : ({ aberto: 'aberto', 'em-analise': 'em análise', encerrado: 'aprovado' }[i.situacao] || i.situacao));
   IC.proximoNumero = () => {
     const ano = hoje().slice(0, 4);
     const n = VP.db.lista('inventarios', true).filter((i) => String(i.numero || '').startsWith(`INV-${ano}-`)).length + 1;
@@ -228,6 +229,117 @@
   };
   const historico = (inv, descricao) => { inv.historico = (inv.historico || []).concat([{ em: agora(), por: quem(), descricao }]); };
 
+  // ------------------------------------------------------------------ observação, esclarecimento e recusa (histórico do inventário)
+  // A Gestão pede esclarecimento (só explicar) ou recusa (erro, algo a alterar): o inventário volta a abrir no celular com o pedido à vista;
+  // quem fez revê e explica no campo de observação ao enviar de novo. Tudo fica guardado em inv.conversa (nunca apagado).
+  const TIPOS_CONV = { envio: 'Observação ao enviar', resposta: 'Resposta de quem fez o inventário', esclarecimento: 'Pedido de esclarecimento', recusa: 'Recusado: corrigir', planilha: 'Planilha importada', devolucao: 'Devolvido para correção' };
+  IC.conversa = (inv) => (inv.conversa || []).concat((inv.devolucoes || []).map((d) => ({ tipo: 'devolucao', em: d.em, por: d.por, texto: d.motivo })))
+    .sort((a, b) => String(a.em).localeCompare(String(b.em)));
+  IC.blocoConversa = (inv) => { const c = IC.conversa(inv); return c.length ? `<ul class="inv-conversa">${c.map((x) => `<li class="inv-conv-${esc(x.tipo)}"><b>${esc(TIPOS_CONV[x.tipo] || x.tipo)}</b> <small>${esc(x.por || '')} · ${esc(u.data(dataLocal(x.em)))} ${esc(horaLocal(x.em))}</small><br>${esc(x.texto)}</li>`).join('')}</ul>` : '<p class="ajuda">Nada registrado ainda.</p>'; };
+  const avisoPedido = (inv) => { const p = inv.pendenteResposta; return p ? `<div class="aviso-inline cel-pedido"><b>${p.tipo === 'recusa' ? 'Inventário recusado: corrija e explique o que fez.' : 'Esclarecimento pedido: explique ao enviar.'}</b><br>${esc(p.texto)}<br><small>${esc(p.por || '')} · ${esc(u.data(dataLocal(p.em)))} ${esc(horaLocal(p.em))}</small></div>` : ''; };
+
+  // ------------------------------------------------------------------ planilha do inventário (baixar e importar de volta)
+  // Célula vazia = não mexe. Nada é apagado: tirar uma linha da planilha não apaga leitura nem sobra. As fotos nunca mudam pela planilha.
+  const COLUNAS = ['Código (não altere)', 'Plaqueta', 'Bem', 'Situação', 'Estado', 'Responsável', 'Sala / local', 'Observação', 'Fotos (só informação)'];
+  IC.linhasPlanilha = (inv) => {
+    const linhas = [];
+    const linhaBem = (b, situacao) => { const x = inv.leituras[b.id]; return [`B:${b.id}`, b.plaqueta, b.descricao, situacao, x ? nomeEstado(x.estado) : '', x ? (x.responsavelId ? VP.nome('responsaveis', x.responsavelId) : 'sem responsável') : '', x ? x.localizacao || '' : '', x ? x.observacao || '' : '', x ? (x.fotos || []).length : 0]; };
+    for (const id of Object.keys(inv.esperados)) { const b = VP.db.pega('bens', id); if (b) linhas.push(linhaBem(b, inv.leituras[id] ? 'Lido' : 'Faltou')); }
+    for (const id of Object.keys(inv.leituras).filter((x) => !inv.esperados[x])) { const b = VP.db.pega('bens', id); if (b) linhas.push(linhaBem(b, 'De outra unidade')); }
+    for (const x of inv.sobras || []) linhas.push([`S:${x.id}`, x.plaqueta || '', x.descricao, x.semPlaqueta ? 'Sem plaqueta' : 'Sobra (sem cadastro)', x.estado ? nomeEstado(x.estado) : '', '', x.localizacao || '', x.observacao || '', (x.fotos || []).length]);
+    return linhas;
+  };
+  IC.baixarPlanilha = (inv) => VP.baixarXLSX(`inventario-${inv.numero}`, [{ nome: inv.numero, cabecalho: COLUNAS, linhas: IC.linhasPlanilha(inv) }]);
+  IC.podeImportar = (inv) => (inv.situacao === 'aberto' && podeCampo()) || (inv.situacao === 'em-analise' && podeAprovar());
+  const norm = (v) => u.normalizar(String(v ?? '')).trim();
+  const estadoDe = (v) => { const t = norm(v); if (!t) return undefined; const n = Number(t); if (Number.isInteger(n) && L.estados[n]) return n; const e = Object.entries(L.estados).find(([, nome]) => norm(nome) === t); return e ? Number(e[0]) : null; };
+  const respDe = (v) => { const t = norm(v); if (!t) return undefined; if (t === norm('sem responsável')) return ''; const r = VP.db.lista('responsaveis').find((x) => norm(x.nome) === t || (x.matricula && norm(x.matricula) === t)); return r ? r.id : null; };
+  // Monta o que vai mudar (sem gravar): { plano: [{ linha, rotulo, bemId | sobraId | nova, mudancas: [{ campo, rotulo, de, para, valor }] }], falhas, semMudanca }
+  IC.lerPlanilha = (inv, abas) => {
+    const linhas = abas?.[0]?.linhas || [];
+    const cab = (linhas[0] || []).map(norm);
+    const ix = { cod: cab.findIndex((c) => c.startsWith('codigo')), pl: cab.indexOf('plaqueta'), bem: cab.indexOf('bem'), est: cab.indexOf('estado'), resp: cab.indexOf('responsavel'), sala: cab.findIndex((c) => c.startsWith('sala')), obs: cab.findIndex((c) => c.startsWith('observ')) };
+    if (ix.cod < 0 && ix.pl < 0) return { erro: 'A planilha não tem as colunas "Código" e "Plaqueta". Use a planilha baixada deste inventário (botão Baixar planilha).' };
+    const plano = [], falhas = [], vistos = new Set(); let semMudanca = 0;
+    linhas.slice(1).forEach((ln, k) => {
+      const nl = k + 2, v = (i) => (i >= 0 ? String(ln[i] ?? '').trim() : '');
+      const cod = v(ix.cod), pl = v(ix.pl), desc = v(ix.bem), sala = v(ix.sala), obs = v(ix.obs);
+      if (!cod && !pl && !desc) return;
+      const estado = estadoDe(v(ix.est)), resp = respDe(v(ix.resp));
+      if (estado === null) { falhas.push({ item: `Linha ${nl}`, motivo: `Estado "${v(ix.est)}" não existe. Use: ${Object.values(L.estados).join(', ')}.` }); return; }
+      if (resp === null) { falhas.push({ item: `Linha ${nl}`, motivo: `Responsável "${v(ix.resp)}" não está em Cadastros → Responsáveis.` }); return; }
+      let bemId = cod.startsWith('B:') && VP.db.pega('bens', cod.slice(2)) ? cod.slice(2) : '';
+      let sobra = cod.startsWith('S:') ? (inv.sobras || []).find((x) => x.id === cod.slice(2)) : null;
+      if (!bemId && !sobra && pl) bemId = LE.acharBem(pl)?.id || '';
+      const chave = bemId || sobra?.id || '';
+      if (chave && vistos.has(chave)) { falhas.push({ item: `Linha ${nl}`, motivo: 'Mesmo bem em duas linhas: só a primeira vale.' }); return; }
+      if (chave) vistos.add(chave);
+      const mud = [], mais = (campo, rotulo, de, para, valor) => { if (String(valor ?? '') !== String(de ?? '')) mud.push({ campo, rotulo, de: campo === 'estado' ? (de ? nomeEstado(de) : '') : campo === 'responsavelId' ? (de === undefined ? '' : nomeResp(de)) : de || '', para: campo === 'estado' ? nomeEstado(valor) : campo === 'responsavelId' ? nomeResp(valor) : valor, valor }); };
+      if (bemId) {
+        const b = VP.db.pega('bens', bemId), x = inv.leituras[bemId];
+        const base = x || { estado: b.estado, responsavelId: b.responsavelId || '', localizacao: b.localizacao || '', observacao: '' };
+        if (estado !== undefined) mais('estado', 'Estado', base.estado, '', estado);
+        if (resp !== undefined) mais('responsavelId', 'Responsável', base.responsavelId, '', resp);
+        if (sala) mais('localizacao', 'Sala / local', base.localizacao, '', sala);
+        if (obs) mais('observacao', 'Observação', base.observacao, '', obs);
+        if (!x && (estado !== undefined || resp !== undefined || sala || obs)) { plano.push({ linha: nl, rotulo: `${b.plaqueta} · ${b.descricao} (passa a lido)`, bemId, nova: true, mudancas: mud }); return; }
+        if (mud.length) plano.push({ linha: nl, rotulo: `${b.plaqueta} · ${b.descricao}`, bemId, mudancas: mud }); else semMudanca++;
+        return;
+      }
+      if (sobra) {
+        if (desc) mais('descricao', 'O que é', sobra.descricao, '', desc);
+        if (estado !== undefined) mais('estado', 'Estado', sobra.estado, '', estado);
+        if (sala) mais('localizacao', 'Sala / local', sobra.localizacao, '', sala);
+        if (obs) mais('observacao', 'Observação', sobra.observacao, '', obs);
+        if (mud.length) plano.push({ linha: nl, rotulo: `Sobra: ${sobra.descricao}`, sobraId: sobra.id, mudancas: mud }); else semMudanca++;
+        return;
+      }
+      if (!desc) { falhas.push({ item: `Linha ${nl}`, motivo: `Plaqueta "${pl}" não está cadastrada: escreva na coluna Bem o que é, para virar sobra.` }); return; }
+      plano.push({ linha: nl, rotulo: `Nova sobra: ${desc}${pl ? ` (plaqueta ${pl})` : ' (sem plaqueta)'}`, nova: true, sobraNova: { plaqueta: pl, descricao: desc, estado: estado ?? null, localizacao: sala, observacao: obs }, mudancas: [] });
+    });
+    return { plano, falhas, semMudanca };
+  };
+  IC.aplicarPlanilha = async (inv, plano) => {
+    for (const p of plano) {
+      if (p.bemId) {
+        const b = VP.db.pega('bens', p.bemId);
+        let x = inv.leituras[p.bemId];
+        if (!x) x = inv.leituras[p.bemId] = { unidadeId: inv.unidadeId, data: hoje(), em: agora(), por: quem(), origem: 'planilha', antes: { unidadeId: b.unidadeId, localizacao: b.localizacao || '', estado: b.estado, responsavelId: b.responsavelId || '' }, estado: b.estado, responsavelId: b.responsavelId || '', localizacao: b.localizacao || '', observacao: '', fotos: [] };
+        for (const m of p.mudancas) x[m.campo] = m.valor; // as fotos da leitura não são tocadas
+        x.editadoEm = agora(); x.editadoPor = quem(); x.editadoPelaPlanilha = true;
+      } else if (p.sobraId) {
+        const x = inv.sobras.find((y) => y.id === p.sobraId);
+        for (const m of p.mudancas) x[m.campo] = m.valor; // fotos da sobra continuam
+        x.editadoEm = agora(); x.editadoPor = quem();
+      } else {
+        inv.sobras = (inv.sobras || []).concat([Object.assign({ id: u.id(), semPlaqueta: !p.sobraNova.plaqueta, unidadeId: inv.unidadeId, data: hoje(), em: agora(), por: quem(), origem: 'planilha', fotos: [] }, p.sobraNova)]);
+      }
+    }
+    inv.conversa = (inv.conversa || []).concat([{ tipo: 'planilha', em: agora(), por: quem(), texto: `${plano.length} linha(s) alterada(s) pela planilha. Fotos não mudam pela planilha.` }]);
+    historico(inv, `Planilha importada (${plano.length} alteração(ões))`);
+    await VP.db.gravar('inventarios', inv);
+  };
+  // Escolhe o arquivo, mostra a prévia e só grava depois de confirmar; no fim, tela de resultado
+  IC.importarPlanilha = async (inv, arquivo) => {
+    let r;
+    try { r = IC.lerPlanilha(inv, await VP.lerArquivoPlanilha(arquivo)); } catch (e) { r = { erro: e.message }; }
+    if (r.erro) { ui.resultado({ titulo: 'Planilha não importada', falhas: [{ item: arquivo.name, motivo: r.erro }] }); return; }
+    const corpo = `<p class="ajuda">Célula vazia não muda nada. Nenhuma leitura é apagada e <b>as fotos não mudam</b> pela planilha.</p>
+      ${r.plano.length ? `<table class="tabela"><thead><tr><th>Linha</th><th>Item</th><th>O que muda</th></tr></thead><tbody>${r.plano.map((p) => `<tr><td>${p.linha}</td><td>${esc(p.rotulo)}</td><td>${p.mudancas.map((m) => `${esc(m.rotulo)}: ${m.de ? `<s>${esc(m.de)}</s> → ` : ''}<b>${esc(m.para)}</b>`).join('<br>') || 'nova'}</td></tr>`).join('')}</tbody></table>` : '<p>Nada a mudar.</p>'}
+      ${r.falhas.length ? `<p class="erro-txt"><b>${r.falhas.length} linha(s) não serão importadas:</b></p><ul>${r.falhas.map((f) => `<li>${esc(f.item)}: ${esc(f.motivo)}</li>`).join('')}</ul>` : ''}
+      <p class="ajuda">${r.semMudanca} linha(s) sem mudança.</p>`;
+    ui.modal({ titulo: `Importar planilha · ${inv.numero}`, largura: 'grande', corpo, botoes: [{ texto: 'Cancelar' }, ...(r.plano.length ? [{ texto: `Aplicar ${r.plano.length} alteração(ões)`, classe: 'primario', acao: async () => {
+      await IC.aplicarPlanilha(inv, r.plano);
+      setTimeout(() => { ui.resultado({ titulo: 'Planilha do inventário importada', sucesso: r.plano.map((p) => `Linha ${p.linha}: ${p.rotulo}`), falhas: r.falhas }); }, 50);
+      VP.app.render();
+    } }] : [])] });
+  };
+  const botoesPlanilha = (inv) => `<button type="button" class="botao" data-baixar-plan>Baixar planilha do inventário</button>${IC.podeImportar(inv) ? '<label class="botao">Importar planilha do inventário<input type="file" accept=".xlsx,.csv" data-imp-plan hidden></label>' : ''}`;
+  const ligarPlanilha = (inv) => {
+    document.querySelectorAll('[data-baixar-plan]').forEach((el) => el.addEventListener('click', () => IC.baixarPlanilha(inv)));
+    document.querySelectorAll('[data-imp-plan]').forEach((el) => el.addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) IC.importarPlanilha(inv, f); }));
+  };
+
   // ------------------------------------------------------------------ texto do termo (tela e PDF)
   // Na tela: Constituição e Lei 4.320. No PDF: também as demais citações do livro (decisão do usuário, 26/10/2026).
   const FUNDAMENTO_TELA = 'art. 70, parágrafo único, da Constituição Federal ("prestará contas qualquer pessoa física ou entidade pública que utilize, arrecade, guarde, gerencie ou administre dinheiros, bens e valores públicos"); art. 94 da Lei nº 4.320/1964';
@@ -309,7 +421,7 @@
     return {
       titulo: 'Inventariar',
       html: `<div class="cel">
-        ${ab.length ? `<h3 class="cel-h">Continuar um inventário</h3><ul class="cel-lista">${ab.map((i) => { const p = IC.progresso(i); return `<li><a href="#campo-inventario/${esc(i.id)}" data-continuar="${esc(i.id)}"><span class="cel-lista-topo"><b>${esc(i.nome)}</b><span class="cel-etq">aberto</span></span>
+        ${ab.length ? `<h3 class="cel-h">Continuar um inventário</h3><ul class="cel-lista">${ab.map((i) => { const p = IC.progresso(i); return `<li><a href="#campo-inventario/${esc(i.id)}" data-continuar="${esc(i.id)}"><span class="cel-lista-topo"><b>${esc(i.nome)}</b><span class="cel-etq ${i.pendenteResposta ? 'cel-etq-alerta' : ''}">${esc(i.pendenteResposta ? (i.pendenteResposta.tipo === 'recusa' ? 'recusado: corrigir' : 'esclarecimento pedido') : 'aberto')}</span></span>
           <span class="cel-barra"><i style="width:${p.total ? Math.round(p.lidos / p.total * 100) : 0}%"></i></span><small>${p.lidos} de ${p.total} lidos · aberto por ${esc(i.criadoPor || '')} em ${u.data(dataLocal(i.abertoEm))}</small></a></li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum inventário aberto. Abra um novo escolhendo a unidade.</p>'}
         <h3 class="cel-h">Novo inventário</h3>
         ${unidades.length ? `<form class="cel-form" data-novo-inv><label class="cel-rotulo">Unidade (ex.: a escola)<select data-unidade required><option value="">Escolha…</option>${unidades.map((x) => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('')}</select></label>
@@ -333,12 +445,13 @@
     if (!podeCampo()) return semAcesso('Inventário');
     const inv = VP.db.pega('inventarios', id);
     if (!inv) return { titulo: 'Inventário', html: '<p>Inventário não encontrado. <a href="#campo-inventarios">Voltar</a></p>' };
-    if (inv.situacao !== 'aberto') return { titulo: inv.nome, html: `<p class="aviso-inline">Este inventário está <b>${esc(IC.situacaoTexto(inv))}</b>. ${inv.situacao === 'em-analise' ? 'Aguarde a análise; se for devolvido para correção, ele volta a abrir aqui.' : ''}</p><p><a href="#campo-inventarios">Voltar</a></p>` };
+    if (inv.situacao !== 'aberto') return { titulo: inv.nome, html: `<p class="aviso-inline">Este inventário está <b>${esc(IC.situacaoTexto(inv))}</b>. ${inv.situacao === 'em-analise' ? 'Aguarde a análise; se pedirem esclarecimento ou recusarem, ele volta a abrir aqui com o pedido.' : ''}</p><p><a href="#campo-inventarios">Voltar</a></p>` };
     const p = IC.progresso(inv);
     const ultimos = Object.entries(inv.leituras).sort((a, b) => String(b[1].em).localeCompare(String(a[1].em))).slice(0, 4);
     return {
       titulo: `Inventário · ${VP.nome('unidades', inv.unidadeId)}`,
       html: `<div class="cel cel-com-barra">
+        ${avisoPedido(inv)}
         <div data-leitor>${LE.html()}</div>
         <div data-item hidden></div>
         <div data-painel>
@@ -456,18 +569,31 @@
         ${r.respDePara.length ? `<h3 class="cel-h">Responsáveis (de → para)</h3><ul class="cel-lista">${r.respDePara.map((x) => `<li class="cel-li">${esc(x.texto)} · ${x.n} bem(ns)</li>`).join('')}</ul>` : ''}
         <h3 class="cel-h">Termos de responsabilidade</h3>
         ${grupos.length ? `<ul class="cel-lista">${grupos.map((g) => { const t = termos.find((x) => x.responsavelId === g.responsavelId && [...x.bens].sort().join('|') === g.bens.join('|')); const a = t?.assinaturaCelular; return `<li class="cel-li">${esc(nomeResp(g.responsavelId))} · ${g.bens.length} bem(ns) · ${a ? (a.situacao === 'recusado' ? '<b>recusou (com testemunha)</b>' : '<b>assinado</b>') : 'falta assinar'}</li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum bem lido com responsável: não há termo a assinar.</p>'}
+        ${avisoPedido(inv)}
+        <label class="cel-rotulo">${inv.pendenteResposta ? 'Explique o que você fez (obrigatório)' : 'Observação (opcional): explique o que for preciso'}<textarea data-obs-envio rows="3">${esc(inv.obsRascunho || '')}</textarea></label>
+        ${IC.conversa(inv).length ? `<details class="cel-historico"><summary>Histórico de observações, esclarecimentos e recusas (${IC.conversa(inv).length})</summary>${IC.blocoConversa(inv)}</details>` : ''}
+        <h3 class="cel-h">Planilha</h3>
+        <div class="cel-linha">${botoesPlanilha(inv)}</div>
+        <p class="ajuda">Baixe, corrija e importe de volta. Célula vazia não muda nada; nada é apagado e as fotos não mudam.</p>
         <p class="ajuda">Depois de enviar, o inventário vai para análise na Gestão. Nada muda no cadastro até alguém aprovar.</p>
         <div class="cel-barra-acoes"><a class="botao" href="#campo-inventario/${esc(inv.id)}">Voltar a ler</a>
           ${grupos.length && !todosProntos ? `<button type="button" class="botao primario" data-ir-termo>Ver termo e assinar</button>` : `<button type="button" class="botao primario" data-enviar ${r.lidos.length || r.sobras.length ? '' : 'disabled'}>Enviar para análise</button>`}</div>
       </div>`,
       ligar() {
+        ligarPlanilha(inv);
+        // Rascunho da observação guardado no inventário (não se perde ao ir assinar o termo)
+        document.querySelector('[data-obs-envio]').addEventListener('change', async (e) => { inv.obsRascunho = e.target.value; await VP.db.gravar('inventarios', inv); });
         document.querySelector('[data-ir-termo]')?.addEventListener('click', async () => {
           const lista = await IC.prepararTermos(inv);
           const falta = lista.find((t) => !t.assinaturaCelular);
           VP.app.ir('#campo-assinar/' + (falta || lista[0]).id);
         });
         document.querySelector('[data-enviar]')?.addEventListener('click', async () => {
+          const obs = document.querySelector('[data-obs-envio]').value.trim();
+          if (inv.pendenteResposta && !obs) { ui.aviso('Explique o que você fez sobre o pedido antes de enviar.'); document.querySelector('[data-obs-envio]').focus(); return; }
           if (!await ui.confirmar(`Enviar <b>${esc(inv.nome)}</b> para análise?<br>${r.lidos.length} lidos, ${r.faltaram.length} faltaram, ${r.deFora.length + r.sobras.length} sobraram.`, { sim: 'Enviar', titulo: 'Enviar para análise' })) return;
+          if (obs) inv.conversa = (inv.conversa || []).concat([{ tipo: inv.pendenteResposta ? 'resposta' : 'envio', em: agora(), por: quem(), texto: obs }]);
+          delete inv.pendenteResposta; delete inv.obsRascunho;
           inv.situacao = 'em-analise'; inv.enviadoEm = agora(); inv.enviadoPor = quem();
           historico(inv, 'Enviado para análise pelo celular');
           await VP.db.gravar('inventarios', inv);
@@ -596,28 +722,35 @@
     else corpo = termos.length ? `<table class="tabela"><thead><tr><th>Termo</th><th>Responsável</th><th>Bens</th><th>Assinatura</th><th></th></tr></thead><tbody>${termos.map((t) => `<tr><td>${esc(t.numero)}</td><td>${esc(nomeResp(t.responsavelId))}</td><td>${t.bens.length}</td><td>${t.assinaturaCelular ? (t.assinaturaCelular.situacao === 'recusado' ? `Recusou · testemunha ${esc(t.assinaturaCelular.testemunha)}` : 'Assinado na tela') : 'Sem assinatura (segue o prazo normal)'}</td><td><button type="button" class="botao pequeno" data-pdf="${esc(t.id)}">PDF</button></td></tr>`).join('')}</tbody></table>` : '<p class="ajuda">Sem termos.</p>';
     return {
       titulo: `Análise do inventário ${inv.numero}`,
-      acoes: '<a class="botao" href="#inventario">‹ Inventário</a>',
+      acoes: `<a class="botao" href="#inventario">‹ Inventário</a> ${botoesPlanilha(inv)}`,
       html: `<p class="ajuda">${esc(VP.nome('unidades', inv.unidadeId))} · aberto por ${esc(inv.criadoPor || '')}${inv.enviadoEm ? ` · enviado por ${esc(inv.enviadoPor || '')} em ${u.data(dataLocal(inv.enviadoEm))} às ${esc(horaLocal(inv.enviadoEm))}` : ''} · situação: <b>${esc(IC.situacaoTexto(inv))}</b></p>
         <div class="resumo-linha">${VP.graficos.numero('Bens lidos', u.inteiro(r.lidos.length))}${VP.graficos.numero('Faltaram', u.inteiro(r.faltaram.length))}${VP.graficos.numero('Sobraram', u.inteiro(r.deFora.length + r.sobras.length))}${VP.graficos.numero('Mudam de responsável', u.inteiro(r.respDePara.reduce((t, x) => t + x.n, 0)))}${VP.graficos.numero('Mudam de estado', u.inteiro(r.estado))}</div>
         <nav class="abas">${abas.map(([k, n]) => `<a href="#inventario-analise/${esc(inv.id)}?aba=${k}" class="${k === aba ? 'ativa' : ''}">${esc(n)}</a>`).join('')}</nav>
         <section class="cartao">${corpo}</section>
-        ${pode ? `<div class="barra-acoes"><button class="botao perigo" data-devolver>Devolver para correção</button><button class="botao primario" data-aprovar>Aprovar mudanças marcadas</button></div>
+        <section class="cartao"><h3>Observações, esclarecimentos e recusas</h3>${IC.blocoConversa(inv)}${inv.situacao === 'aberto' && inv.pendenteResposta ? '<p class="aviso-inline">Aguardando resposta de quem fez o inventário.</p>' : ''}</section>
+        ${pode ? `<div class="barra-acoes"><button class="botao" data-esclarecer>Pedir esclarecimento</button><button class="botao perigo" data-recusar>Recusar</button><button class="botao primario" data-aprovar>Aprovar mudanças marcadas</button></div>
           <p class="ajuda">Ao aprovar: os dados do inventário substituem os do bem (só os marcados), cada bem guarda o antes e o depois com o número ${esc(inv.numero)}, e os termos de responsabilidade passam a valer.</p>` : ''}
         ${inv.situacao === 'encerrado' ? `<p class="aviso-inline">Aprovado por ${esc(inv.aprovadoPor || '')} em ${u.data(dataLocal(inv.aprovadoEm))}.</p>` : ''}`,
       ligar() {
         const raiz = document.getElementById('conteudo');
         raiz.querySelectorAll('[data-pdf]').forEach((el) => el.addEventListener('click', () => IC.imprimirTermo(VP.db.pega('termosResp', el.dataset.pdf))));
-        raiz.querySelector('[data-devolver]')?.addEventListener('click', () => ui.formulario({
-          titulo: 'Devolver para correção', largura: 'pequena', textoSalvar: 'Devolver',
-          campos: [{ chave: 'motivo', rotulo: 'O que precisa corrigir?', tipo: 'area', obrigatorio: true }],
+        ligarPlanilha(inv);
+        // Esclarecimento = só explicar; recusa = erro ou algo a alterar. Os dois reabrem o inventário no celular com o texto à vista.
+        const devolver = (tipo) => ui.formulario({
+          titulo: tipo === 'recusa' ? 'Recusar inventário' : 'Pedir esclarecimento', largura: 'pequena', textoSalvar: tipo === 'recusa' ? 'Recusar e devolver' : 'Pedir esclarecimento',
+          intro: `<p class="ajuda">${tipo === 'recusa' ? 'Use quando há erro ou algo a alterar.' : 'Use quando só falta explicar algo.'} O inventário volta a abrir no celular com o seu texto; quem fez revê e explica o que fez ao enviar de novo. Nada muda nos bens.</p>`,
+          campos: [{ chave: 'texto', rotulo: tipo === 'recusa' ? 'O que está errado ou precisa ser alterado?' : 'O que precisa ser esclarecido?', tipo: 'area', obrigatorio: true }],
           salvar: async (v) => {
             inv.situacao = 'aberto';
-            inv.devolucoes = (inv.devolucoes || []).concat([{ em: agora(), por: quem(), motivo: v.motivo }]);
-            historico(inv, `Devolvido para correção: ${v.motivo}`);
+            inv.pendenteResposta = { tipo, texto: v.texto, em: agora(), por: quem() };
+            inv.conversa = (inv.conversa || []).concat([{ tipo, em: agora(), por: quem(), texto: v.texto }]);
+            historico(inv, `${tipo === 'recusa' ? 'Recusado' : 'Esclarecimento pedido'}: ${v.texto}`);
             await VP.db.gravar('inventarios', inv);
-            ui.aviso('Inventário devolvido: volta a abrir no celular.'); VP.app.ir('#inventario');
+            ui.aviso(tipo === 'recusa' ? 'Inventário recusado: volta a abrir no celular para corrigir.' : 'Esclarecimento pedido: o inventário volta a abrir no celular.'); VP.app.ir('#inventario');
           }
-        }));
+        });
+        raiz.querySelector('[data-esclarecer]')?.addEventListener('click', () => devolver('esclarecimento'));
+        raiz.querySelector('[data-recusar]')?.addEventListener('click', () => devolver('recusa'));
         raiz.querySelector('[data-aprovar]')?.addEventListener('click', async () => {
           // Fora da aba Mudanças, todos os bens com mudança contam como marcados
           const caixas = [...raiz.querySelectorAll('[data-aplicar]')];

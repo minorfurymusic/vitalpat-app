@@ -593,3 +593,16 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 .cel-pdf { margin-top: 10px; }
 .inv-ficha + .inv-ficha { border-top: 1px solid var(--borda); margin-top: 10px; padding-top: 10px; }
 @media print { .cel-doc { border: 0; padding: 0; font-size: 12pt; } }
+
+/* Inventário pelo celular: pedido de esclarecimento/recusa e histórico (27/10/2026) */
+.cel-etq-alerta { border-color: var(--critico); color: var(--critico); font-weight: 600; }
+.cel-pedido { margin-bottom: 10px; }
+.cel-rotulo textarea { width: 100%; min-width: 0; font: inherit; font-weight: 400; font-size: 16px; padding: 8px 10px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); color: var(--texto); }
+.cel-historico { margin: 10px 0; } .cel-historico summary { cursor: pointer; font-weight: 600; }
+.inv-conversa { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 6px; }
+.inv-conversa li { border-left: 4px solid var(--borda); padding: 4px 10px; background: var(--superficie); }
+.inv-conversa li small { color: var(--texto-2); }
+.inv-conv-recusa, .inv-conv-devolucao { border-left-color: var(--critico) !important; }
+.inv-conv-esclarecimento { border-left-color: var(--atencao) !important; }
+.inv-conv-resposta, .inv-conv-envio { border-left-color: var(--ok) !important; }
+.cel-linha label.botao { flex: 1; min-height: 46px; }

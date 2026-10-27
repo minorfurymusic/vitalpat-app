@@ -606,3 +606,14 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 .inv-conv-esclarecimento { border-left-color: var(--atencao) !important; }
 .inv-conv-resposta, .inv-conv-envio { border-left-color: var(--ok) !important; }
 .cel-linha label.botao { flex: 1; min-height: 46px; }
+/* Lista de itens do pedido (checklist), 27/10/2026 */
+.inv-itens { margin: 4px 0 0 18px; padding: 0; }
+.inv-itens li { margin: 2px 0; }
+.inv-feito { color: var(--ok); } .inv-nao-feito { color: var(--critico); }
+.cel-checklist { margin-bottom: 10px; }
+.cel-item { display: grid; gap: 6px; }
+.cel-item span { color: var(--texto-2); }
+.cel-item-feito { border-left: 4px solid var(--ok) !important; }
+.cel-feito { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 36px; }
+.cel-feito input { width: 22px; height: 22px; }
+.cel-o-que-fiz { min-height: 42px; font: inherit; font-size: 16px; padding: 0 10px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); color: var(--texto); width: 100%; min-width: 0; }

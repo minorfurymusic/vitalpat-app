@@ -235,8 +235,27 @@
   const TIPOS_CONV = { envio: 'Observação ao enviar', resposta: 'Resposta de quem fez o inventário', esclarecimento: 'Pedido de esclarecimento', recusa: 'Recusado: corrigir', planilha: 'Planilha importada', devolucao: 'Devolvido para correção' };
   IC.conversa = (inv) => (inv.conversa || []).concat((inv.devolucoes || []).map((d) => ({ tipo: 'devolucao', em: d.em, por: d.por, texto: d.motivo })))
     .sort((a, b) => String(a.em).localeCompare(String(b.em)));
-  IC.blocoConversa = (inv) => { const c = IC.conversa(inv); return c.length ? `<ul class="inv-conversa">${c.map((x) => `<li class="inv-conv-${esc(x.tipo)}"><b>${esc(TIPOS_CONV[x.tipo] || x.tipo)}</b> <small>${esc(x.por || '')} · ${esc(u.data(dataLocal(x.em)))} ${esc(horaLocal(x.em))}</small><br>${esc(x.texto)}</li>`).join('')}</ul>` : '<p class="ajuda">Nada registrado ainda.</p>'; };
-  const avisoPedido = (inv) => { const p = inv.pendenteResposta; return p ? `<div class="aviso-inline cel-pedido"><b>${p.tipo === 'recusa' ? 'Inventário recusado: corrija e explique o que fez.' : 'Esclarecimento pedido: explique ao enviar.'}</b><br>${esc(p.texto)}<br><small>${esc(p.por || '')} · ${esc(u.data(dataLocal(p.em)))} ${esc(horaLocal(p.em))}</small></div>` : ''; };
+  const listaItens = (itens, comResposta) => (itens || []).length ? `<ol class="inv-itens">${itens.map((i) => `<li><b>${esc(i.rotulo)}</b>: ${esc(i.texto)}${comResposta ? `<br><span class="${i.feito ? 'inv-feito' : 'inv-nao-feito'}">${i.feito ? '✓ Feito' : 'Não feito'}${i.resposta ? `: ${esc(i.resposta)}` : ''}</span>` : ''}</li>`).join('')}</ol>` : '';
+  IC.blocoConversa = (inv) => { const c = IC.conversa(inv); return c.length ? `<ul class="inv-conversa">${c.map((x) => `<li class="inv-conv-${esc(x.tipo)}"><b>${esc(TIPOS_CONV[x.tipo] || x.tipo)}</b> <small>${esc(x.por || '')} · ${esc(u.data(dataLocal(x.em)))} ${esc(horaLocal(x.em))}</small>${x.texto ? `<br>${esc(x.texto)}` : ''}${listaItens(x.itens, x.tipo === 'resposta')}</li>`).join('')}</ul>` : '<p class="ajuda">Nada registrado ainda.</p>'; };
+  // Lista de itens do pedido (checklist): no celular, cada item tem "Feito" e "O que fiz"; tocar abre o bem
+  IC.faltamItens = (inv) => (inv.pendenteResposta?.itens || []).filter((i) => !i.feito || !String(i.resposta || '').trim());
+  IC.blocoItens = (inv) => {
+    const itens = inv.pendenteResposta?.itens || [];
+    if (!itens.length) return '';
+    const falta = IC.faltamItens(inv).length;
+    return `<section class="cel-checklist"><h3 class="cel-h">Itens pedidos (${itens.length - falta} de ${itens.length} feitos)</h3><ul class="cel-lista">${itens.map((i) => `<li class="cel-li cel-item ${i.feito ? 'cel-item-feito' : ''}">
+      <b>${esc(i.rotulo)}</b><span>${esc(i.texto)}</span>
+      <label class="cel-feito"><input type="checkbox" data-item-feito="${esc(i.id)}" ${i.feito ? 'checked' : ''}> Feito</label>
+      <input class="cel-o-que-fiz" data-item-resposta="${esc(i.id)}" value="${esc(i.resposta || '')}" placeholder="O que fiz" aria-label="O que fiz: ${esc(i.rotulo)}">
+      ${i.alvo === 'bem' && VP.db.pega('bens', i.ref) ? `<button type="button" class="botao pequeno" data-item-abrir="${esc(i.ref)}">Abrir bem</button>` : ''}</li>`).join('')}</ul></section>`;
+  };
+  const ligarItens = (inv, aoAbrir) => {
+    const achar = (id) => inv.pendenteResposta.itens.find((x) => x.id === id);
+    document.querySelectorAll('[data-item-feito]').forEach((el) => el.addEventListener('change', async () => { const i = achar(el.dataset.itemFeito); i.feito = el.checked; i.feitoEm = agora(); i.feitoPor = quem(); el.closest('.cel-item').classList.toggle('cel-item-feito', el.checked); await VP.db.gravar('inventarios', inv); }));
+    document.querySelectorAll('[data-item-resposta]').forEach((el) => el.addEventListener('change', async () => { achar(el.dataset.itemResposta).resposta = el.value.trim(); await VP.db.gravar('inventarios', inv); }));
+    document.querySelectorAll('[data-item-abrir]').forEach((el) => el.addEventListener('click', () => aoAbrir(el.dataset.itemAbrir)));
+  };
+  const avisoPedido = (inv) => { const p = inv.pendenteResposta; return p ? `<div class="aviso-inline cel-pedido"><b>${p.tipo === 'recusa' ? 'Inventário recusado: corrija e explique o que fez.' : 'Esclarecimento pedido: explique ao enviar.'}</b>${p.texto ? `<br>${esc(p.texto)}` : ''}${(p.itens || []).length ? '<br>Veja a lista de itens abaixo.' : ''}<br><small>${esc(p.por || '')} · ${esc(u.data(dataLocal(p.em)))} ${esc(horaLocal(p.em))}</small></div>` : ''; };
 
   // ------------------------------------------------------------------ planilha do inventário (baixar e importar de volta)
   // Célula vazia = não mexe. Nada é apagado: tirar uma linha da planilha não apaga leitura nem sobra. As fotos nunca mudam pela planilha.
@@ -441,7 +460,7 @@
   };
 
   // --- leitura: câmera e digitação na mesma tela; o item abre embaixo, sem outra tela
-  T['campo-inventario'] = (id) => {
+  T['campo-inventario'] = (id, query = {}) => {
     if (!podeCampo()) return semAcesso('Inventário');
     const inv = VP.db.pega('inventarios', id);
     if (!inv) return { titulo: 'Inventário', html: '<p>Inventário não encontrado. <a href="#campo-inventarios">Voltar</a></p>' };
@@ -452,6 +471,7 @@
       titulo: `Inventário · ${VP.nome('unidades', inv.unidadeId)}`,
       html: `<div class="cel cel-com-barra">
         ${avisoPedido(inv)}
+        <div data-checklist>${IC.blocoItens(inv)}</div>
         <div data-leitor>${LE.html()}</div>
         <div data-item hidden></div>
         <div data-painel>
@@ -466,7 +486,7 @@
         const itemEl = raiz.querySelector('[data-item]'), leitorEl = raiz.querySelector('[data-leitor]'), painel = raiz.querySelector('[data-painel]');
         const barra = raiz.querySelector('.cel-barra-acoes');
         // Com o item aberto, a barra de baixo some (não cobre os botões do item)
-        const mostrarLeitor = () => { itemEl.hidden = true; itemEl.innerHTML = ''; leitorEl.hidden = false; painel.hidden = false; barra.hidden = false; LE.pausar(false); };
+        const mostrarLeitor = () => { itemEl.hidden = true; itemEl.innerHTML = ''; leitorEl.hidden = false; painel.hidden = false; barra.hidden = false; raiz.querySelector('[data-checklist]').hidden = false; LE.pausar(false); };
         const abrirForm = (html, aoSalvar) => {
           LE.pausar(true); leitorEl.hidden = true; painel.hidden = true; barra.hidden = true; itemEl.hidden = false; itemEl.innerHTML = html;
           const fotos = [];
@@ -540,6 +560,9 @@
         });
         raiz.querySelector('[data-sem-plaqueta]').addEventListener('click', () => abrirSobra(''));
         raiz.querySelectorAll('[data-reabrir]').forEach((el) => el.addEventListener('click', () => abrirBem(VP.db.pega('bens', el.dataset.reabrir), inv.leituras[el.dataset.reabrir]?.origem || 'digitado')));
+        const abrirPorId = (bid) => { const b = VP.db.pega('bens', bid); if (b) { raiz.querySelector('[data-checklist]').hidden = true; abrirBem(b, inv.leituras[bid]?.origem || 'digitado'); } };
+        if (inv.pendenteResposta?.itens?.length) ligarItens(inv, abrirPorId);
+        if (query.abrir) abrirPorId(query.abrir);
       }
     };
   };
@@ -570,6 +593,7 @@
         <h3 class="cel-h">Termos de responsabilidade</h3>
         ${grupos.length ? `<ul class="cel-lista">${grupos.map((g) => { const t = termos.find((x) => x.responsavelId === g.responsavelId && [...x.bens].sort().join('|') === g.bens.join('|')); const a = t?.assinaturaCelular; return `<li class="cel-li">${esc(nomeResp(g.responsavelId))} · ${g.bens.length} bem(ns) · ${a ? (a.situacao === 'recusado' ? '<b>recusou (com testemunha)</b>' : '<b>assinado</b>') : 'falta assinar'}</li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum bem lido com responsável: não há termo a assinar.</p>'}
         ${avisoPedido(inv)}
+        ${IC.blocoItens(inv)}
         <label class="cel-rotulo">${inv.pendenteResposta ? 'Explique o que você fez (obrigatório)' : 'Observação (opcional): explique o que for preciso'}<textarea data-obs-envio rows="3">${esc(inv.obsRascunho || '')}</textarea></label>
         ${IC.conversa(inv).length ? `<details class="cel-historico"><summary>Histórico de observações, esclarecimentos e recusas (${IC.conversa(inv).length})</summary>${IC.blocoConversa(inv)}</details>` : ''}
         <h3 class="cel-h">Planilha</h3>
@@ -581,6 +605,7 @@
       </div>`,
       ligar() {
         ligarPlanilha(inv);
+        if (inv.pendenteResposta?.itens?.length) ligarItens(inv, (bid) => VP.app.ir(`#campo-inventario/${inv.id}?abrir=${bid}`));
         // Rascunho da observação guardado no inventário (não se perde ao ir assinar o termo)
         document.querySelector('[data-obs-envio]').addEventListener('change', async (e) => { inv.obsRascunho = e.target.value; await VP.db.gravar('inventarios', inv); });
         document.querySelector('[data-ir-termo]')?.addEventListener('click', async () => {
@@ -590,9 +615,14 @@
         });
         document.querySelector('[data-enviar]')?.addEventListener('click', async () => {
           const obs = document.querySelector('[data-obs-envio]').value.trim();
+          const faltam = IC.faltamItens(inv);
+          if (faltam.length) { ui.aviso(`Faltam ${faltam.length} item(ns) do pedido: marque "Feito" e escreva o que fez em cada um.`); document.querySelector('[data-item-feito]')?.scrollIntoView({ block: 'center' }); return; }
           if (inv.pendenteResposta && !obs) { ui.aviso('Explique o que você fez sobre o pedido antes de enviar.'); document.querySelector('[data-obs-envio]').focus(); return; }
           if (!await ui.confirmar(`Enviar <b>${esc(inv.nome)}</b> para análise?<br>${r.lidos.length} lidos, ${r.faltaram.length} faltaram, ${r.deFora.length + r.sobras.length} sobraram.`, { sim: 'Enviar', titulo: 'Enviar para análise' })) return;
-          if (obs) inv.conversa = (inv.conversa || []).concat([{ tipo: inv.pendenteResposta ? 'resposta' : 'envio', em: agora(), por: quem(), texto: obs }]);
+          const itensResp = inv.pendenteResposta?.itens ? JSON.parse(JSON.stringify(inv.pendenteResposta.itens)) : null;
+          if (obs || itensResp) inv.conversa = (inv.conversa || []).concat([Object.assign({ tipo: inv.pendenteResposta ? 'resposta' : 'envio', em: agora(), por: quem(), texto: obs }, itensResp ? { itens: itensResp } : {})]);
+          // A análise vê item por item o que foi pedido e o que foi feito, e pode reabrir só alguns
+          inv.itensRespondidos = itensResp ? { tipo: inv.pendenteResposta.tipo, em: agora(), itens: itensResp } : null;
           delete inv.pendenteResposta; delete inv.obsRascunho;
           inv.situacao = 'em-analise'; inv.enviadoEm = agora(); inv.enviadoPor = quem();
           historico(inv, 'Enviado para análise pelo celular');
@@ -712,12 +742,15 @@
     const pode = podeAprovar() && inv.situacao === 'em-analise';
     const abas = [['mudancas', `Mudanças (${r.mudancas.length})`], ['faltaram', `Faltaram (${r.faltaram.length})`], ['sobraram', `Sobraram (${r.deFora.length + r.sobras.length})`], ['sem', `Sem mudança (${r.semMudanca.length})`], ['termos', `Termos e assinaturas (${termos.length})`]];
     const fotos = (lista) => (lista || []).map((f) => `<img src="${f.dataURL}" alt="Foto">`).join('');
+    const botaoPedido = (alvo, ref) => `<button type="button" class="botao pequeno" data-pedido="${alvo}|${esc(ref)}" title="Incluir este item na lista do pedido de esclarecimento ou da recusa">+ Pedido</button>`;
+    const rascunho = inv.pedidoRascunho || [];
+    const resp = inv.itensRespondidos;
     let corpo = '';
-    if (aba === 'mudancas') corpo = r.mudancas.length ? `<table class="tabela"><thead><tr>${pode ? '<th></th>' : ''}<th>Plaqueta</th><th>Bem</th><th>O que muda (de → para)</th><th>Fotos</th></tr></thead><tbody>${r.mudancas.map(({ b, lista }) => `<tr>${pode ? `<td><input type="checkbox" data-aplicar="${esc(b.id)}" checked aria-label="Aplicar mudanças do bem ${esc(b.plaqueta)}"></td>` : ''}<td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}${inv.esperados[b.id] ? '' : ' <span class="selo-atencao">de outra unidade</span>'}</td>
-        <td>${lista.map((m) => `${esc(m.rotulo)}: ${m.de ? `<s>${esc(m.de)}</s> → ` : ''}<b>${esc(m.para)}</b>${m.campo === 'estado' && m.para === 'Imprestável' ? ' <span class="selo-alerta">vai para baixa</span>' : ''}`).join('<br>')}</td><td class="cel-mini">${fotos(inv.leituras[b.id].fotos)}</td></tr>`).join('')}</tbody></table>` : '<p class="ajuda">Nenhuma mudança.</p>';
-    else if (aba === 'faltaram') corpo = r.faltaram.length ? `<table class="tabela"><thead><tr><th>Plaqueta</th><th>Bem</th><th>Responsável</th></tr></thead><tbody>${r.faltaram.map((b) => `<tr><td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}</td><td>${esc(nomeResp(b.responsavelId))}</td></tr>`).join('')}</tbody></table><p class="ajuda">Ao aprovar, cada bem que faltou recebe o registro "não localizado" com o número do inventário. O cadastro não muda.</p>` : '<p class="ajuda">Nenhum bem faltou.</p>';
-    else if (aba === 'sobraram') corpo = `${r.deFora.length ? `<h3>Bens de outra unidade achados aqui</h3><ul>${r.deFora.map((b) => `<li><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a> · ${esc(b.descricao)} (cadastro: ${esc(VP.nome('unidades', b.unidadeId))})</li>`).join('')}</ul>` : ''}
-        ${r.sobras.length ? `<h3>Sem cadastro ou sem plaqueta</h3><table class="tabela"><thead><tr><th>Plaqueta</th><th>O que é</th><th>Estado</th><th>Local</th><th>Fotos</th></tr></thead><tbody>${r.sobras.map((s) => `<tr><td>${esc(s.plaqueta || 'sem plaqueta')}</td><td>${esc(s.descricao)}</td><td>${esc(s.estado ? nomeEstado(s.estado) : '')}</td><td>${esc(s.localizacao || '')}</td><td class="cel-mini">${fotos(s.fotos)}</td></tr>`).join('')}</tbody></table><p class="ajuda">Sobras não viram bem sozinhas: cadastre pela tela Novo bem.</p>` : ''}${!r.deFora.length && !r.sobras.length ? '<p class="ajuda">Nada sobrou.</p>' : ''}`;
+    if (aba === 'mudancas') corpo = r.mudancas.length ? `<table class="tabela"><thead><tr>${pode ? '<th></th>' : ''}<th>Plaqueta</th><th>Bem</th><th>O que muda (de → para)</th><th>Fotos</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.mudancas.map(({ b, lista }) => `<tr>${pode ? `<td><input type="checkbox" data-aplicar="${esc(b.id)}" checked aria-label="Aplicar mudanças do bem ${esc(b.plaqueta)}"></td>` : ''}<td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}${inv.esperados[b.id] ? '' : ' <span class="selo-atencao">de outra unidade</span>'}</td>
+        <td>${lista.map((m) => `${esc(m.rotulo)}: ${m.de ? `<s>${esc(m.de)}</s> → ` : ''}<b>${esc(m.para)}</b>${m.campo === 'estado' && m.para === 'Imprestável' ? ' <span class="selo-alerta">vai para baixa</span>' : ''}`).join('<br>')}</td><td class="cel-mini">${fotos(inv.leituras[b.id].fotos)}</td>${pode ? `<td>${botaoPedido('bem', b.id)}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<p class="ajuda">Nenhuma mudança.</p>';
+    else if (aba === 'faltaram') corpo = r.faltaram.length ? `<table class="tabela"><thead><tr><th>Plaqueta</th><th>Bem</th><th>Responsável</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.faltaram.map((b) => `<tr><td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}</td><td>${esc(nomeResp(b.responsavelId))}</td>${pode ? `<td>${botaoPedido('bem', b.id)}</td>` : ''}</tr>`).join('')}</tbody></table><p class="ajuda">Ao aprovar, cada bem que faltou recebe o registro "não localizado" com o número do inventário. O cadastro não muda.</p>` : '<p class="ajuda">Nenhum bem faltou.</p>';
+    else if (aba === 'sobraram') corpo = `${r.deFora.length ? `<h3>Bens de outra unidade achados aqui</h3><ul>${r.deFora.map((b) => `<li><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a> · ${esc(b.descricao)} (cadastro: ${esc(VP.nome('unidades', b.unidadeId))}) ${pode ? botaoPedido('bem', b.id) : ''}</li>`).join('')}</ul>` : ''}
+        ${r.sobras.length ? `<h3>Sem cadastro ou sem plaqueta</h3><table class="tabela"><thead><tr><th>Plaqueta</th><th>O que é</th><th>Estado</th><th>Local</th><th>Fotos</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.sobras.map((s) => `<tr><td>${esc(s.plaqueta || 'sem plaqueta')}</td><td>${esc(s.descricao)}</td><td>${esc(s.estado ? nomeEstado(s.estado) : '')}</td><td>${esc(s.localizacao || '')}</td><td class="cel-mini">${fotos(s.fotos)}</td>${pode ? `<td>${botaoPedido('sobra', s.id)}</td>` : ''}</tr>`).join('')}</tbody></table><p class="ajuda">Sobras não viram bem sozinhas: cadastre pela tela Novo bem.</p>` : ''}${!r.deFora.length && !r.sobras.length ? '<p class="ajuda">Nada sobrou.</p>' : ''}`;
     else if (aba === 'sem') corpo = r.semMudanca.length ? `<ul>${r.semMudanca.map((b) => `<li>${esc(b.plaqueta)} · ${esc(b.descricao)}</li>`).join('')}</ul>` : '<p class="ajuda">Nenhum.</p>';
     else corpo = termos.length ? `<table class="tabela"><thead><tr><th>Termo</th><th>Responsável</th><th>Bens</th><th>Assinatura</th><th></th></tr></thead><tbody>${termos.map((t) => `<tr><td>${esc(t.numero)}</td><td>${esc(nomeResp(t.responsavelId))}</td><td>${t.bens.length}</td><td>${t.assinaturaCelular ? (t.assinaturaCelular.situacao === 'recusado' ? `Recusou · testemunha ${esc(t.assinaturaCelular.testemunha)}` : 'Assinado na tela') : 'Sem assinatura (segue o prazo normal)'}</td><td><button type="button" class="botao pequeno" data-pdf="${esc(t.id)}">PDF</button></td></tr>`).join('')}</tbody></table>` : '<p class="ajuda">Sem termos.</p>';
     return {
@@ -727,6 +760,8 @@
         <div class="resumo-linha">${VP.graficos.numero('Bens lidos', u.inteiro(r.lidos.length))}${VP.graficos.numero('Faltaram', u.inteiro(r.faltaram.length))}${VP.graficos.numero('Sobraram', u.inteiro(r.deFora.length + r.sobras.length))}${VP.graficos.numero('Mudam de responsável', u.inteiro(r.respDePara.reduce((t, x) => t + x.n, 0)))}${VP.graficos.numero('Mudam de estado', u.inteiro(r.estado))}</div>
         <nav class="abas">${abas.map(([k, n]) => `<a href="#inventario-analise/${esc(inv.id)}?aba=${k}" class="${k === aba ? 'ativa' : ''}">${esc(n)}</a>`).join('')}</nav>
         <section class="cartao">${corpo}</section>
+        ${resp && inv.situacao === 'em-analise' ? `<section class="cartao"><h3>Itens pedidos e o que foi feito</h3><table class="tabela" data-sem-planilha><thead><tr>${pode ? '<th>Reabrir</th>' : ''}<th>Item</th><th>Pedido</th><th>O que foi feito</th></tr></thead><tbody>${resp.itens.map((i) => `<tr>${pode ? `<td><input type="checkbox" data-reabrir-item="${esc(i.id)}" aria-label="Reabrir ${esc(i.rotulo)}"></td>` : ''}<td>${esc(i.rotulo)}</td><td>${esc(i.texto)}</td><td>${i.feito ? '✓ ' : ''}${esc(i.resposta || '')}</td></tr>`).join('')}</tbody></table>${pode ? '<p><button class="botao" data-reabrir-itens>Reabrir só os itens marcados</button></p>' : ''}</section>` : ''}
+        ${pode ? `<section class="cartao"><h3>Lista do pedido (${rascunho.length})</h3>${rascunho.length ? `<ol class="inv-itens">${rascunho.map((i) => `<li><b>${esc(i.rotulo)}</b>: ${esc(i.texto)} <button type="button" class="botao pequeno" data-tirar-pedido="${esc(i.id)}">Tirar</button></li>`).join('')}</ol>` : '<p class="ajuda">Use "+ Pedido" nas linhas das abas (Mudanças, Faltaram, Sobraram) ou "+ Item geral" para montar a lista. Ela vai junto ao pedir esclarecimento ou recusar.</p>'}<button type="button" class="botao pequeno" data-pedido="geral|">+ Item geral</button></section>` : ''}
         <section class="cartao"><h3>Observações, esclarecimentos e recusas</h3>${IC.blocoConversa(inv)}${inv.situacao === 'aberto' && inv.pendenteResposta ? '<p class="aviso-inline">Aguardando resposta de quem fez o inventário.</p>' : ''}</section>
         ${pode ? `<div class="barra-acoes"><button class="botao" data-esclarecer>Pedir esclarecimento</button><button class="botao perigo" data-recusar>Recusar</button><button class="botao primario" data-aprovar>Aprovar mudanças marcadas</button></div>
           <p class="ajuda">Ao aprovar: os dados do inventário substituem os do bem (só os marcados), cada bem guarda o antes e o depois com o número ${esc(inv.numero)}, e os termos de responsabilidade passam a valer.</p>` : ''}
@@ -736,18 +771,40 @@
         raiz.querySelectorAll('[data-pdf]').forEach((el) => el.addEventListener('click', () => IC.imprimirTermo(VP.db.pega('termosResp', el.dataset.pdf))));
         ligarPlanilha(inv);
         // Esclarecimento = só explicar; recusa = erro ou algo a alterar. Os dois reabrem o inventário no celular com o texto à vista.
-        const devolver = (tipo) => ui.formulario({
-          titulo: tipo === 'recusa' ? 'Recusar inventário' : 'Pedir esclarecimento', largura: 'pequena', textoSalvar: tipo === 'recusa' ? 'Recusar e devolver' : 'Pedir esclarecimento',
-          intro: `<p class="ajuda">${tipo === 'recusa' ? 'Use quando há erro ou algo a alterar.' : 'Use quando só falta explicar algo.'} O inventário volta a abrir no celular com o seu texto; quem fez revê e explica o que fez ao enviar de novo. Nada muda nos bens.</p>`,
-          campos: [{ chave: 'texto', rotulo: tipo === 'recusa' ? 'O que está errado ou precisa ser alterado?' : 'O que precisa ser esclarecido?', tipo: 'area', obrigatorio: true }],
+        const rotuloDe = (alvo, ref) => {
+          if (alvo === 'bem') { const b = VP.db.pega('bens', ref); return b ? `${b.plaqueta} · ${b.descricao}` : 'Bem'; }
+          if (alvo === 'sobra') { const x = (inv.sobras || []).find((y) => y.id === ref); return x ? `Sobra: ${x.descricao}` : 'Sobra'; }
+          return 'Geral';
+        };
+        raiz.querySelectorAll('[data-pedido]').forEach((el) => el.addEventListener('click', () => {
+          const [alvo, ref] = el.dataset.pedido.split('|');
+          ui.formulario({ titulo: `+ Pedido: ${rotuloDe(alvo, ref)}`, largura: 'pequena', textoSalvar: 'Pôr na lista',
+            campos: [{ chave: 'texto', rotulo: 'O que precisa (corrigir ou explicar)?', tipo: 'area', obrigatorio: true }],
+            salvar: async (v) => { inv.pedidoRascunho = (inv.pedidoRascunho || []).concat([{ id: u.id(), alvo, ref, rotulo: rotuloDe(alvo, ref), texto: v.texto }]); await VP.db.gravar('inventarios', inv); VP.app.render(); } });
+        }));
+        raiz.querySelectorAll('[data-tirar-pedido]').forEach((el) => el.addEventListener('click', async () => { inv.pedidoRascunho = (inv.pedidoRascunho || []).filter((i) => i.id !== el.dataset.tirarPedido); await VP.db.gravar('inventarios', inv); VP.app.render(); }));
+        const devolver = (tipo, itensProntos = null) => {
+          const itens = (itensProntos || inv.pedidoRascunho || []).map((i) => ({ id: u.id(), alvo: i.alvo, ref: i.ref, rotulo: i.rotulo, texto: i.texto, feito: false, resposta: '' }));
+          return ui.formulario({
+          titulo: tipo === 'recusa' ? 'Recusar inventário' : 'Pedir esclarecimento', largura: 'media', textoSalvar: tipo === 'recusa' ? 'Recusar e devolver' : 'Pedir esclarecimento',
+          intro: `<p class="ajuda">${tipo === 'recusa' ? 'Use quando há erro ou algo a alterar.' : 'Use quando só falta explicar algo.'} O inventário volta a abrir no celular com o seu texto${itens.length ? ' e a lista de itens (cada um precisa ser marcado como feito e explicado)' : ''}. Nada muda nos bens.</p>${itens.length ? `<p><b>Lista (${itens.length})</b></p>${listaItens(itens, false)}` : ''}`,
+          campos: [{ chave: 'texto', rotulo: (tipo === 'recusa' ? 'O que está errado ou precisa ser alterado?' : 'O que precisa ser esclarecido?') + (itens.length ? ' (opcional: a lista já diz)' : ''), tipo: 'area', obrigatorio: !itens.length }],
           salvar: async (v) => {
             inv.situacao = 'aberto';
-            inv.pendenteResposta = { tipo, texto: v.texto, em: agora(), por: quem() };
-            inv.conversa = (inv.conversa || []).concat([{ tipo, em: agora(), por: quem(), texto: v.texto }]);
+            inv.pendenteResposta = { tipo, texto: v.texto || '', em: agora(), por: quem(), itens };
+            inv.conversa = (inv.conversa || []).concat([{ tipo, em: agora(), por: quem(), texto: v.texto || '', itens: JSON.parse(JSON.stringify(itens)) }]);
+            if (!itensProntos) inv.pedidoRascunho = [];
+            inv.itensRespondidos = null;
             historico(inv, `${tipo === 'recusa' ? 'Recusado' : 'Esclarecimento pedido'}: ${v.texto}`);
             await VP.db.gravar('inventarios', inv);
             ui.aviso(tipo === 'recusa' ? 'Inventário recusado: volta a abrir no celular para corrigir.' : 'Esclarecimento pedido: o inventário volta a abrir no celular.'); VP.app.ir('#inventario');
           }
+        });
+        };
+        raiz.querySelector('[data-reabrir-itens]')?.addEventListener('click', () => {
+          const ids = [...raiz.querySelectorAll('[data-reabrir-item]:checked')].map((c) => c.dataset.reabrirItem);
+          if (!ids.length) { ui.aviso('Marque os itens a reabrir.'); return; }
+          devolver(resp.tipo, resp.itens.filter((i) => ids.includes(i.id)));
         });
         raiz.querySelector('[data-esclarecer]')?.addEventListener('click', () => devolver('esclarecimento'));
         raiz.querySelector('[data-recusar]')?.addEventListener('click', () => devolver('recusa'));

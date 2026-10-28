@@ -12,7 +12,17 @@
   const agora = () => VP.Plataforma.agoraISO();
   const usuario = () => VP.servidor?.ativo ? (VP.servidor.perfil?.nome || VP.servidor.perfil?.email || 'servidor') : (VP.sessao?.usuario || 'demonstração');
   const selo = (classe, texto) => `<span class="selo-status im-${classe || 'neutro'}">${esc(texto)}</span>`;
-  E.TIPOS_DOC = ['Matrícula atualizada', 'Escritura', 'Habite-se', 'AVCB (Corpo de Bombeiros)', 'Alvará de funcionamento', 'Alvará sanitário', 'Laudo técnico', 'Laudo de avaliação', 'Planta', 'Licença ambiental', 'Outro'];
+  E.TIPOS_DOC = ['Matrícula atualizada', 'Escritura', 'Habite-se', 'AVCB (Corpo de Bombeiros)', 'Alvará de funcionamento', 'Alvará sanitário', 'Alvará de construção', 'Laudo técnico', 'Laudo de avaliação', 'Laudo de vistoria', 'Planta', 'Planta de situação',
+    'Folha de tombo', 'Ficha de cadastro', 'Termo de responsabilidade', 'Termo de entrega e recebimento', 'Termo de exame e recebimento de obras', 'Certidão vintenária', 'Cadeia dominial', 'Licença ambiental', 'Outro'];
+  // Lista de conferência da situação documental (livro "Gestão patrimonial", 4.2, págs. 311–321 e 329; etapa 2, 28/10/2026).
+  // Básicos = sem eles o imóvel não está documentado; complementares = pedidos conforme o caso ("Não se aplica" marcado pela pessoa).
+  E.CONFERENCIA = [
+    { tipo: 'Escritura', grupo: 'Básico' }, { tipo: 'Matrícula atualizada', grupo: 'Básico' },
+    { tipo: 'Certidão vintenária', grupo: 'Complementar' }, { tipo: 'Cadeia dominial', grupo: 'Complementar' },
+    { tipo: 'Planta', grupo: 'Complementar' }, { tipo: 'Planta de situação', grupo: 'Complementar' }, { tipo: 'Folha de tombo', grupo: 'Complementar' },
+    { tipo: 'Ficha de cadastro', grupo: 'Complementar' }, { tipo: 'Termo de responsabilidade', grupo: 'Complementar' }, { tipo: 'Laudo de vistoria', grupo: 'Complementar' },
+    { tipo: 'Termo de entrega e recebimento', grupo: 'Complementar' }, { tipo: 'Termo de exame e recebimento de obras', grupo: 'Complementar' },
+    { tipo: 'Habite-se', grupo: 'Complementar' }, { tipo: 'Alvará de construção', grupo: 'Complementar' }];
   E.TIPOS_CESSAO = { cessao: 'Cessão de uso', permissao: 'Permissão de uso', concessao: 'Concessão de uso', comodato: 'Comodato', locacao: 'Locação' };
   E.SITUACOES_REG = ['Registrado', 'Em regularização', 'Sem registro', 'Posse'];
   const avisoDias = () => VP.config().avisoImovelDias ?? 60;
@@ -46,14 +56,58 @@
   };
   const evento = (b, descricao, extra = {}) => VP.novoEvento(b.id, 'observacao', { descricao, extra });
 
+  // ------------------------------------------------------------------ situação documental (lista de conferência)
+  // Para cada documento: "tem" (há documento desse tipo registrado), "falta" ou "nao-aplica" (marcado pela pessoa).
+  E.conferencia = (b) => {
+    const tipos = new Set(E.docsDe(b.id).map((d) => d.tipo));
+    const na = new Set(b.imovel?.docsNaoAplica || []);
+    const itens = E.CONFERENCIA.map((c) => ({ ...c, situacao: tipos.has(c.tipo) ? 'tem' : na.has(c.tipo) ? 'nao-aplica' : 'falta' }));
+    const conta = itens.filter((i) => i.situacao !== 'nao-aplica');
+    const tem = conta.filter((i) => i.situacao === 'tem').length;
+    return { itens, tem, total: conta.length, pct: conta.length ? Math.round((tem / conta.length) * 100) : 100, faltamBasicos: itens.filter((i) => i.grupo === 'Básico' && i.situacao === 'falta').map((i) => i.tipo), faltam: itens.filter((i) => i.situacao === 'falta').map((i) => i.tipo) };
+  };
+  E.marcarNaoAplica = async (b, tipo, marcar, depois) => {
+    const im = b.imovel || (b.imovel = {});
+    const antes = (im.docsNaoAplica || []).slice();
+    im.docsNaoAplica = marcar ? [...new Set([...antes, tipo])] : antes.filter((t) => t !== tipo);
+    await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'alteracao', { descricao: `Situação documental: "${tipo}" ${marcar ? 'marcado como não se aplica' : 'volta a ser pedido'}`, extra: { mudancas: [{ campo: 'Documentos que não se aplicam', antes: antes.join('; '), depois: im.docsNaoAplica.join('; ') }] } })] });
+    depois && depois();
+  };
+  // Limites e confrontações: sugere o trecho do texto da matrícula; a pessoa confere e corrige antes de gravar.
+  E.trechoConfrontacoes = (texto) => {
+    const t = String(texto || '').replace(/\s+/g, ' ');
+    const i = t.search(/confronta|divisa|limita-se|limites|faz frente|frente para|pelos fundos/i);
+    if (i < 0) return '';
+    const ini = Math.max(0, t.lastIndexOf('.', i) + 1);
+    return t.slice(ini, ini + 700).trim();
+  };
+  E.matriculasComTexto = (b) => String(b.imovel?.matricula || '').split(/\s*;\s*/).filter(Boolean).map((n) => VP.matriculaPeloNumero && VP.matriculaPeloNumero(n)).filter((m) => m && m.texto);
+  E.copiarConfrontacoes = (b, depois) => {
+    const mats = E.matriculasComTexto(b);
+    if (!mats.length) return ui.aviso('A matrícula deste imóvel ainda não tem texto (Cadastros → Matrículas).', 'erro');
+    const sugestao = mats.map((m) => { const tr = E.trechoConfrontacoes(m.texto); return tr ? (mats.length > 1 ? `Matrícula ${m.matricula}: ` : '') + tr : ''; }).filter(Boolean).join('\n');
+    ui.formulario({
+      titulo: 'Limites e confrontações — ' + b.descricao, largura: 'media',
+      intro: `<p class="ajuda">${sugestao ? 'Trecho achado no texto da matrícula. <b>Confira e corrija</b> antes de gravar: a leitura é automática e pode pegar texto a mais ou a menos.' : 'Não achei no texto da matrícula as palavras de costume (confronta, divisa, limites, frente, fundos). Copie o trecho à mão, abrindo a matrícula na ficha.'}${b.imovel?.confrontacoes ? ' O texto que já estava gravado vai para o histórico.' : ''}</p>`,
+      campos: [{ chave: 'confrontacoes', rotulo: 'Limites e confrontações', tipo: 'area', obrigatorio: true }],
+      valores: { confrontacoes: sugestao || b.imovel?.confrontacoes || '' },
+      salvar: async (x) => {
+        const im = b.imovel || (b.imovel = {}); const antes = im.confrontacoes || '';
+        im.confrontacoes = x.confrontacoes.trim();
+        await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'alteracao', { descricao: 'Limites e confrontações copiados do texto da matrícula (conferidos pela pessoa)', extra: { mudancas: [{ campo: 'Limites e confrontações', antes, depois: im.confrontacoes }] } })] });
+        ui.aviso('Limites e confrontações gravados.'); depois && depois();
+      }
+    });
+  };
+
   // ------------------------------------------------------------------ ações
-  E.novoDocumento = (b, depois, d0 = null) => ui.formulario({
+  E.novoDocumento = (b, depois, d0 = null, tipoInicial = '') => ui.formulario({
     titulo: (d0 ? 'Editar documento — ' : 'Documento do imóvel — ') + b.descricao, largura: 'media',
     campos: [{ chave: 'tipo', rotulo: 'Tipo', tipo: 'select', opcoes: E.TIPOS_DOC.map((x) => [x, x]), obrigatorio: true, largura: 'meia' }, { chave: 'numero', rotulo: 'Número ou identificação', largura: 'meia' },
       { chave: 'emissao', rotulo: 'Emissão', tipo: 'data', largura: 'meia' }, { chave: 'validade', rotulo: 'Validade (vazio se não vence)', tipo: 'data', largura: 'meia' },
       { chave: 'orgao', rotulo: 'Órgão que emitiu', largura: 'meia' }, { chave: 'observacao', rotulo: 'Observação', largura: 'meia' },
       { chave: 'arquivos', rotulo: 'Arquivo (PDF ou foto)', tipo: 'arquivo', multiplo: true, aceita: 'image/*,application/pdf' }],
-    valores: d0 || {},
+    valores: d0 || (tipoInicial ? { tipo: tipoInicial } : {}),
     salvar: async (x) => {
       if (x.validade && x.emissao && x.validade < x.emissao) return 'A validade não pode ser antes da emissão.';
       const arquivos = await ui.lerArquivos(x.arquivos, { reduzirImagem: true });
@@ -131,6 +185,15 @@
   // ------------------------------------------------------------------ ficha do imóvel: 3 seções
   const seloDoc = (d) => ({ vencido: selo('ruim', 'Vencido'), vencendo: selo('regular', 'Vencendo'), valido: selo('bom', 'Válido'), 'sem-validade': selo('', 'Sem validade') }[E.situacaoDoc(d)]);
   const seloCessao = (c) => (c.encerradaEm ? selo('', 'Encerrada') : E.cessaoVencida(c) ? selo('ruim', 'Vencida') : E.cessaoVencendo(c) ? selo('regular', 'Vencendo') : selo('bom', 'Em vigor'));
+  const SIT_CONF = { tem: ['bom', 'Tem'], falta: ['ruim', 'Falta'], 'nao-aplica': ['', 'Não se aplica'] };
+  const cartaoConferencia = (b, pode) => {
+    const c = E.conferencia(b);
+    const linha = (i) => `<li><span class="conf-nome">${selo(SIT_CONF[i.situacao][0], SIT_CONF[i.situacao][1])} ${esc(i.tipo)}</span><span class="conf-acoes">${pode && i.situacao === 'falta' ? ` <button class="botao pequeno" data-conf-registrar="${esc(i.tipo)}">Registrar</button> <button class="botao pequeno" data-conf-na="${esc(i.tipo)}">Não se aplica</button>` : ''}${pode && i.situacao === 'nao-aplica' ? ` <button class="botao pequeno" data-conf-volta="${esc(i.tipo)}">Pedir de novo</button>` : ''}</span></li>`;
+    return `<section class="cartao secao" id="sec-conferencia"><header><h3>Situação documental</h3>${pode && E.matriculasComTexto(b).length ? '<button class="botao pequeno" data-copiar-confrontacoes>Copiar limites da matrícula</button>' : ''}</header>
+      <p><b>${c.tem} de ${c.total}</b> documentos (${c.pct}%)${c.faltamBasicos.length ? ` · ${selo('ruim', 'Faltam básicos')} ${esc(c.faltamBasicos.join(', '))}` : ''}</p>
+      ${['Básico', 'Complementar'].map((g) => `<h4>${g === 'Básico' ? 'Básicos' : 'Complementares'}</h4><ul class="lista-conferencia">${c.itens.filter((i) => i.grupo === g).map(linha).join('')}</ul>`).join('')}
+      <p class="ajuda">"Tem" = há documento desse tipo em "Documentos do imóvel". Marque "Não se aplica" quando o documento não existe para este imóvel (ex.: termo de obras em terreno sem construção).</p></section>`;
+  };
   E.secoesFicha = (b) => {
     const docs = E.docsDe(b.id), ces = E.cessoesDe(b.id), pend = E.pendenciasDe(b.id);
     const arq = (l) => (l || []).filter((a) => a.dataURL).map((a) => `<a href="${esc(a.dataURL)}" target="_blank" rel="noopener" download="${esc(a.nome || 'documento')}">${esc(a.nome || 'arquivo')}</a>`).join(' ');
@@ -147,6 +210,7 @@
         ${temLocal ? `<p>${esc(b.imovel.lat)}, ${esc(b.imovel.lon)} · <a href="https://www.google.com/maps/search/?api=1&query=${esc(b.imovel.lat)},${esc(b.imovel.lon)}" target="_blank" rel="noopener">Abrir no Google Maps</a> · <a href="#imoveis/mapa">Ver no mapa dos imóveis</a></p>` : '<p class="vazio">Sem localização. Informe para o imóvel aparecer no mapa e no relatório com mapa.</p>'}</section>
       <section class="cartao secao" id="sec-docs-imovel"><header><h3>Documentos do imóvel</h3><button class="botao pequeno" data-imo="doc">+ Documento</button></header>
         ${docs.length ? `<ul class="lista-simples">${docs.map((d) => `<li>${seloDoc(d)} <b>${esc(d.tipo)}</b>${d.numero ? ' ' + esc(d.numero) : ''}${d.validade ? ' · validade ' + u.data(d.validade) : ''}${d.orgao ? ' · ' + esc(d.orgao) : ''} ${arq(d.arquivos)} <button class="botao pequeno" data-imo-doc="${esc(d.id)}">Atualizar</button></li>`).join('')}</ul>` : '<p class="vazio">Nenhum documento. Ex.: matrícula, habite-se, AVCB, alvarás, laudos.</p>'}</section>
+      ${cartaoConferencia(b, pode)}
       <section class="cartao secao"><header><h3>Cessões e uso por terceiros</h3><button class="botao pequeno" data-imo="cessao">+ Registrar</button></header>
         ${ces.length ? `<ul class="lista-simples">${ces.map((c) => `<li>${seloCessao(c)} <b>${esc(E.TIPOS_CESSAO[c.tipo])}</b> ${c.direcao === 'a-terceiros' ? 'a' : 'de'} ${esc(c.parte)} · ${u.data(c.inicio)} a ${c.fim ? u.data(c.fim) : 'indeterminado'}${c.instrumento ? ' · ' + esc(c.instrumento) : ''}${c.valor ? ' · ' + u.moeda(c.valor) + '/mês' : ''} ${!c.encerradaEm ? `<button class="botao pequeno" data-imo-renovar="${esc(c.id)}">Renovar</button> <button class="botao pequeno" data-imo-encerrar="${esc(c.id)}">Encerrar</button>` : ''}</li>`).join('')}</ul>` : '<p class="vazio">Nenhuma.</p>'}</section>
       <section class="cartao secao"><header><h3>Regularização</h3><button class="botao pequeno" data-imo="pendencia">+ Pendência</button></header>
@@ -159,6 +223,10 @@
     area.querySelector('[data-ler-matricula]')?.addEventListener('click', () => VP.matricula.lerParaBem(b, re));
     if (VP.blocoMatricula) VP.blocoMatricula.ligar(area.querySelector('#sec-matricula') || area, re);
     area.querySelector('[data-local-imovel]')?.addEventListener('click', () => VP.mapas.informarLocal(b, re));
+    area.querySelectorAll('[data-conf-registrar]').forEach((el) => el.addEventListener('click', () => E.novoDocumento(b, re, null, el.dataset.confRegistrar)));
+    area.querySelectorAll('[data-conf-na]').forEach((el) => el.addEventListener('click', () => E.marcarNaoAplica(b, el.dataset.confNa, true, re)));
+    area.querySelectorAll('[data-conf-volta]').forEach((el) => el.addEventListener('click', () => E.marcarNaoAplica(b, el.dataset.confVolta, false, re)));
+    area.querySelector('[data-copiar-confrontacoes]')?.addEventListener('click', () => E.copiarConfrontacoes(b, re));
     area.querySelectorAll('[data-imo-doc]').forEach((el) => el.addEventListener('click', () => E.novoDocumento(b, re, VP.db.pega('documentosImovel', el.dataset.imoDoc))));
     area.querySelectorAll('[data-imo-renovar]').forEach((el) => el.addEventListener('click', () => E.renovarCessao(b, VP.db.pega('cessoesImovel', el.dataset.imoRenovar), re)));
     area.querySelectorAll('[data-imo-encerrar]').forEach((el) => el.addEventListener('click', () => E.encerrarCessao(b, VP.db.pega('cessoesImovel', el.dataset.imoEncerrar), re)));
@@ -167,13 +235,25 @@
 
   // ------------------------------------------------------------------ painel dos imóveis + demonstrativo TCE
   T.imoveis = (aba = 'painel') => {
-    const abas = `<nav class="abas">${[['painel', 'Situação'], ['documentos', 'Documentos'], ['cessoes', 'Cessões'], ['pendencias', 'Pendências'], ['mapa', 'Mapa']].map(([k, n]) => `<a href="#imoveis${k === 'painel' ? '' : '/' + k}" class="${k === aba ? 'ativa' : ''}">${n}</a>`).join('')}</nav>`;
+    const abas = `<nav class="abas">${[['painel', 'Situação'], ['situacao-documental', 'Situação documental'], ['documentos', 'Documentos'], ['cessoes', 'Cessões'], ['pendencias', 'Pendências'], ['mapa', 'Mapa']].map(([k, n]) => `<a href="#imoveis${k === 'painel' ? '' : '/' + k}" class="${k === aba ? 'ativa' : ''}">${n}</a>`).join('')}</nav>`;
     const im = E.lista();
     const imo = im.filter((b) => b.tipo === 'imovel');
     const nomeBem = (id) => { const b = VP.db.pega('bens', id); return b ? `<a href="#bem/${esc(b.id)}">${esc(b.codigo)} · ${esc(b.descricao)}</a>` : '—'; };
     const valBem = (id) => { const b = VP.db.pega('bens', id); return b ? `${b.codigo} · ${b.descricao}` : ''; };
     const ids = new Set(im.map((b) => b.id));
     if (aba === 'mapa') return VP.mapas.telaMapa(abas);
+    if (aba === 'situacao-documental') {
+      // planilha de controle da situação documental de cada imóvel (livro, 4.2: plano de trabalho de regularização)
+      const l = imo.map((b) => ({ b, c: E.conferencia(b) }));
+      const colDocs = E.CONFERENCIA.map((d) => ({ chave: 'd-' + d.tipo, titulo: d.tipo, oculta: true, valor: (x) => SIT_CONF[x.c.itens.find((i) => i.tipo === d.tipo).situacao][1] }));
+      return { titulo: 'Bens imóveis', html: abas + '<p class="ajuda">Quanto da documentação de cada imóvel já está no sistema. Abra o imóvel para registrar o que falta ou marcar "Não se aplica". "Baixar planilha" leva também uma coluna por documento (escolha as colunas).</p>' + ui.tabela({ id: 'imo-conf', linhas: l, porPagina: 100, nomePlanilha: 'situacao-documental-imoveis', vazio: 'Nenhum imóvel.', colunas: [
+        { chave: 'imovel', titulo: 'Imóvel', html: (x) => nomeBem(x.b.id), valor: (x) => valBem(x.b.id) },
+        { chave: 'registro', titulo: 'Situação do registro', valor: (x) => x.b.imovel?.situacaoRegistro || '' },
+        { chave: 'pct', titulo: 'Documentado', num: true, valor: (x) => x.c.pct, formato: (v) => v + '%' },
+        { chave: 'tem', titulo: 'Tem', num: true, valor: (x) => x.c.tem }, { chave: 'total', titulo: 'Pedidos', num: true, valor: (x) => x.c.total },
+        { chave: 'basicos', titulo: 'Faltam básicos', valor: (x) => x.c.faltamBasicos.join(', ') },
+        { chave: 'faltam', titulo: 'Faltam (todos)', valor: (x) => x.c.faltam.join(', ') }, ...colDocs] }), ligar() { ui.ligarTabela('imo-conf'); } };
+    }
     if (aba === 'documentos') {
       const l = VP.db.lista('documentosImovel').filter((d) => ids.has(d.bemId));
       return { titulo: 'Bens imóveis', html: abas + ui.tabela({ id: 'imo-docs', linhas: l, porPagina: 100, nomePlanilha: 'documentos-imoveis', vazio: 'Nenhum documento.', colunas: [{ chave: 'situacao', titulo: 'Situação', html: seloDoc, valor: (d) => ({ vencido: 'Vencido', vencendo: 'Vencendo', valido: 'Válido', 'sem-validade': 'Sem validade' }[E.situacaoDoc(d)]) }, { chave: 'imovel', titulo: 'Imóvel', html: (d) => nomeBem(d.bemId), valor: (d) => valBem(d.bemId) }, { chave: 'tipo', titulo: 'Documento' }, { chave: 'numero', titulo: 'Número' }, { chave: 'validade', titulo: 'Validade', valor: (d) => u.data(d.validade), ordenar: (d) => d.validade || '9' }, { chave: 'orgao', titulo: 'Órgão' }] }), ligar() { ui.ligarTabela('imo-docs'); } };

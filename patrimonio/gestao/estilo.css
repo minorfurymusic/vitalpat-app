@@ -617,3 +617,9 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 .cel-feito { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 36px; }
 .cel-feito input { width: 22px; height: 22px; }
 .cel-o-que-fiz { min-height: 42px; font: inherit; font-size: 16px; padding: 0 10px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); color: var(--texto); width: 100%; min-width: 0; }
+
+/* Situação documental do imóvel (lista de conferência, 28/10/2026) */
+.lista-conferencia { list-style: none; margin: 0 0 10px; padding: 0; }
+.lista-conferencia li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 5px 0; border-bottom: 1px solid var(--borda); }
+.lista-conferencia .conf-nome { min-width: 0; }
+.lista-conferencia .conf-acoes { display: flex; gap: 4px; flex-wrap: wrap; }

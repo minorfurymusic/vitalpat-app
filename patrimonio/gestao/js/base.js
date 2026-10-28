@@ -121,6 +121,8 @@ VP.LISTAS = {
   usuariosImovel: ['Proprietário (a própria prefeitura)', 'Residente', 'Locatário', 'Cessionário', 'Comodatário', 'Arrendatário', 'Permissionário'],
   metodos: { linear: 'Cotas constantes (linear)', somaDigitos: 'Soma dos dígitos', unidades: 'Unidades produzidas' },
   tiposBaixa: ['Inservível', 'Alienação (leilão)', 'Doação', 'Furto / roubo', 'Extravio', 'Sinistro', 'Permuta', 'Fim da vida útil'],
+  // Só para imóveis (etapa 5, 28/10/2026). Formas de alienação da Lei 14.133/2021, art. 76, I [A conferir no texto oficial]
+  tiposBaixaImovel: ['Demolição', 'Dação em pagamento', 'Investidura', 'Venda a outro órgão ou entidade pública'],
   tiposTransferencia: { interna: 'Interna (entre unidades)', externa: 'Externa (empréstimo, cessão, conserto fora)', entidade: 'Entre entidades / fundos' },
   // Tipos de evento da linha do tempo
   eventos: {
@@ -129,6 +131,7 @@ VP.LISTAS = {
     reavaliacao: { nome: 'Reavaliação', grupo: 'financeiro' },
     agregacao: { nome: 'Melhoria (agregação)', grupo: 'financeiro' },
     baixa: { nome: 'Baixa', grupo: 'financeiro' },
+    baixaParcial: { nome: 'Baixa parcial', grupo: 'financeiro' }, // imóvel: perda de área ou demolição de parte (etapa 5 do livro, 28/10/2026)
     estorno: { nome: 'Estorno', grupo: 'financeiro' },
     transferencia: { nome: 'Transferência', grupo: 'fisico' },
     desuso: { nome: 'Desuso', grupo: 'fisico' },

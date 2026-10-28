@@ -209,6 +209,122 @@
       ui.aviso('Benfeitoria registrada.'); depois && depois();
     }
   });
+  // ------------------------------------------------------------------ baixa parcial, dividir e juntar (livro 4.2, págs. 348 e 355; etapa 5, 28/10/2026)
+  const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
+  const copiaImovel = (im) => { const c = JSON.parse(JSON.stringify(im || {})); delete c.benfeitorias; delete c.docsNaoAplica; delete c.matricula; delete c.areaTerreno; delete c.frente; delete c.fundos; delete c.lateralDireita; delete c.lateralEsquerda; delete c.confrontacoes; delete c.lat; delete c.lon; return c; };
+  const vidaRestante = (b) => { const s = VP.saldo(b); if (!s.inicio || !s.vidaUtilMeses) return s.vidaUtilMeses || 0; return Math.max(1, s.vidaUtilMeses - Math.max(0, u.mesesEntre(s.inicio, hoje().slice(0, 7)))); };
+  // Baixa parcial: sai uma fração do valor (e da depreciação acumulada). A fração vem da área que saiu ou do % informado.
+  E.baixaParcial = (b, depois) => {
+    const s = VP.saldo(b), im = b.imovel || {};
+    const constr = E.benfeitoriasDe(b);
+    ui.formulario({
+      titulo: 'Baixa parcial — ' + b.descricao, largura: 'media', textoSalvar: 'Dar baixa parcial',
+      intro: `<p class="aviso-inline">Para quando o imóvel <b>perde uma parte</b>: desapropriação de faixa, retificação de área, demolição de uma construção. Sai a mesma proporção do valor e da depreciação acumulada. O imóvel continua no patrimônio. Para tirar o imóvel inteiro, use <b>Baixa</b>.</p><p>Valor contábil hoje: <b>${u.moeda(s.liquido)}</b>${im.areaTerreno ? ` · área do terreno: <b>${u.inteiro(im.areaTerreno)} m²</b>` : ''}</p>`,
+      campos: [{ chave: 'motivo', rotulo: 'Motivo', tipo: 'select', obrigatorio: true, opcoes: ['Demolição parcial', 'Perda de área (desapropriação, faixa de via)', 'Retificação de área na matrícula', 'Sinistro (incêndio, desabamento)', 'Outro'].map((x) => [x, x]) },
+        { chave: 'areaSaiu', rotulo: 'Área do terreno que saiu (m²)', tipo: 'numero', largura: 'meia', ajuda: im.areaTerreno ? 'O % é calculado sobre a área do terreno.' : 'Sem área do terreno no cadastro: informe o %.' },
+        { chave: 'percentual', rotulo: 'Ou: % do valor que sai', tipo: 'numero', largura: 'meia', ajuda: 'Use quando a parte não é medida em área (ex.: uma construção). Vale mais que a área.' },
+        { chave: 'construcaoId', rotulo: 'Construção demolida (vai para a Lixeira)', tipo: 'select', opcoes: constr.map((x) => [x.id, x.nome]) },
+        { chave: 'data', rotulo: 'Data', tipo: 'data', obrigatorio: true, padrao: hoje(), largura: 'meia' }, { chave: 'documento', rotulo: 'Decreto, laudo ou processo', obrigatorio: true, largura: 'meia' },
+        { chave: 'descricao', rotulo: 'O que aconteceu', tipo: 'area', obrigatorio: true }],
+      salvar: async (v) => {
+        let f = 0;
+        if (v.percentual) f = Number(v.percentual) / 100;
+        else if (v.areaSaiu && im.areaTerreno) f = Number(v.areaSaiu) / Number(im.areaTerreno);
+        else return 'Informe a área que saiu (com a área do terreno no cadastro) ou o %.';
+        if (!(f > 0 && f < 1)) return 'A parte que sai precisa ser maior que 0 e menor que o imóvel inteiro. Para tirar tudo, use Baixa.';
+        if (v.data < (b.dataIncorporacao || '')) return 'A data não pode ser antes da incorporação.';
+        const antes = VP.saldo(b, v.data);
+        const valor = r2(antes.liquidoAntesDaBaixa * f);
+        const areaAntes = im.areaTerreno;
+        if (v.areaSaiu && im.areaTerreno) im.areaTerreno = r2(Number(im.areaTerreno) - Number(v.areaSaiu));
+        const c = constr.find((x) => x.id === v.construcaoId);
+        if (c) { c.excluido = true; c.excluidoEm = agora(); c.motivoExclusao = `${v.motivo} · ${v.documento}`; }
+        const ev = VP.novoEvento(b.id, 'baixaParcial', { data: v.data, valor, descricao: `Baixa parcial — ${v.motivo} (${u.pct(f)})${c ? ' · construção ' + c.nome : ''}: ${v.descricao}`,
+          extra: { fracao: f, motivo: v.motivo, documento: v.documento, areaSaiu: v.areaSaiu || null, areaAntes: areaAntes ?? null, areaDepois: im.areaTerreno ?? null, construcaoId: c ? c.id : '', baseAntes: antes.base, acumuladaAntes: antes.acumulada } });
+        await VP.db.gravarVarias({ bens: [b], eventos: [ev] });
+        ui.resultado({ titulo: 'Baixa parcial', sucesso: [`${b.codigo} · ${b.descricao}: saiu ${u.moeda(valor)}${v.areaSaiu && areaAntes ? ` e ${u.inteiro(v.areaSaiu)} m² (área: ${u.inteiro(areaAntes)} → ${u.inteiro(im.areaTerreno)} m²)` : ''}`], falhas: [] });
+        depois && depois();
+      }
+    });
+  };
+  // Novo imóvel a partir de outro(s), com o valor contábil que veio. A depreciação começa de novo no mês seguinte (vida útil restante do original).
+  const montarImovel = (base, d, codigo = null, ctx = null) => {
+    const { bens, eventos } = VP.montarBens({ descricao: d.descricao, complemento: d.descricao, classificacaoId: base.classificacaoId, unidadeId: base.unidadeId, responsavelId: base.responsavelId, entidadeId: base.entidadeId,
+      dataAquisicao: base.dataAquisicao, dataIncorporacao: d.data, valor: d.valor, situacaoAquisicao: d.situacao, estado: base.estado, origemTexto: d.origemTexto, tipo: 'imovel' }, codigo, ctx);
+    const nb = bens[0];
+    nb.tipo = 'imovel'; nb.contaId = base.contaId; nb.endereco = base.endereco ? JSON.parse(JSON.stringify(base.endereco)) : null;
+    nb.imovel = Object.assign(copiaImovel(base.imovel), { matricula: d.matricula || '', areaTerreno: d.area || null, origemArea: 'Outra', origemImoveis: d.origens, historico: [base.imovel?.historico, d.historico].filter(Boolean).join('\n') });
+    nb.depreciacao = Object.assign({}, base.depreciacao || {}, { inicio: u.somaMeses(d.data.slice(0, 7), 1) + '-01', vidaUtilMeses: d.vida });
+    return { nb, eventos };
+  };
+  E.desmembrar = (b, depois) => {
+    const s = VP.saldo(b), im = b.imovel || {};
+    ui.formulario({
+      titulo: 'Dividir imóvel (desmembramento) — ' + b.descricao, largura: 'pequena', textoSalvar: 'Continuar',
+      intro: '<p class="ajuda">O terreno foi dividido em lotes com matrículas próprias. O sistema cria um cadastro para cada parte e dá baixa no original como "Desmembramento". Nada é apagado: o original fica baixado, ligado às partes.</p>',
+      campos: [{ chave: 'partes', rotulo: 'Em quantas partes?', tipo: 'numero', padrao: 2, obrigatorio: true }],
+      salvar: (v0) => {
+        const q = Math.floor(v0.partes || 0);
+        if (q < 2 || q > 10) return 'De 2 a 10 partes.';
+        setTimeout(() => ui.formulario({
+          titulo: `Dividir em ${q} partes — ${b.descricao}`, largura: 'media', textoSalvar: 'Dividir',
+          intro: `<p class="aviso-inline">O valor contábil (<b>${u.moeda(s.liquido)}</b>) é repartido <b>pela área</b> de cada parte (ou em partes iguais, se faltar área). Cada parte começa a depreciar no mês seguinte, com a vida útil que faltava ao original. <b>Confira com a contabilidade</b> antes de confirmar.</p>${im.areaTerreno ? `<p>Área do original: <b>${u.inteiro(im.areaTerreno)} m²</b></p>` : ''}`,
+          campos: [{ chave: 'data', rotulo: 'Data', tipo: 'data', obrigatorio: true, padrao: hoje(), largura: 'meia' }, { chave: 'documento', rotulo: 'Documento (decreto, aprovação do desmembramento)', obrigatorio: true, largura: 'meia' }]
+            .concat(...Array.from({ length: q }, (_, i) => [{ chave: `d${i}`, rotulo: `Parte ${i + 1}: nome`, obrigatorio: true, padrao: `${b.descricao} — lote ${i + 1}` }, { chave: `a${i}`, rotulo: `Parte ${i + 1}: área (m²)`, tipo: 'numero', largura: 'meia' }, { chave: `m${i}`, rotulo: `Parte ${i + 1}: matrícula`, largura: 'meia' }])),
+          valores: Object.fromEntries(Array.from({ length: q }, (_, i) => [`d${i}`, `${b.descricao} — lote ${i + 1}`]).concat([['data', hoje()]])),
+          salvar: async (v) => {
+            if (b.status === 'baixado') return 'Este imóvel já está baixado.';
+            if (v.data < (b.dataIncorporacao || '')) return 'A data não pode ser antes da incorporação.';
+            const areas = Array.from({ length: q }, (_, i) => Number(v[`a${i}`]) || 0);
+            const usaArea = areas.every((a) => a > 0);
+            if (!usaArea && areas.some((a) => a > 0)) return 'Informe a área de todas as partes, ou de nenhuma (aí o valor é dividido em partes iguais).';
+            if (usaArea && im.areaTerreno && Math.abs(areas.reduce((t, a) => t + a, 0) - im.areaTerreno) > im.areaTerreno * 0.05) return `A soma das áreas (${u.inteiro(areas.reduce((t, a) => t + a, 0))} m²) passa de 5% de diferença da área do original (${u.inteiro(im.areaTerreno)} m²). Confira ou faça antes uma baixa parcial (retificação).`;
+            const sd = VP.saldo(b, v.data), total = sd.liquidoAntesDaBaixa, somaA = areas.reduce((t, a) => t + a, 0);
+            let resto = total; const vida = vidaRestante(b);
+            const novos = [], eventos = [];
+            const ctx = VP.contextoPlaquetas(), cod0 = VP.proximoCodigo(); // ainda não gravados: códigos e plaquetas reservados em sequência
+            for (let i = 0; i < q; i++) {
+              const valor = i === q - 1 ? r2(resto) : r2(usaArea ? total * areas[i] / somaA : total / q); resto -= valor;
+              const { nb, eventos: evs } = montarImovel(b, { descricao: v[`d${i}`], data: v.data, valor, situacao: 'Desmembramento', origemTexto: `desmembramento do imóvel ${b.codigo}`, matricula: v[`m${i}`], area: areas[i] || null, origens: [b.id], vida, historico: `Veio do desmembramento do imóvel ${b.codigo} (${v.documento}).` }, cod0 + i, ctx);
+              novos.push(nb); eventos.push(...evs);
+            }
+            b.status = 'baixado'; im.desmembradoEm = novos.map((x) => x.id);
+            const baixa = VP.novoEvento(b.id, 'baixa', { data: v.data, valor: total, descricao: `Baixa — Desmembramento em ${q} partes (${novos.map((x) => x.codigo).join(', ')})`, extra: { tipoBaixa: 'Desmembramento', motivo: 'Desmembramento', documento: v.documento, destinoIds: novos.map((x) => x.id) } });
+            await VP.db.gravarVarias({ bens: [b, ...novos], eventos: [baixa, ...eventos] });
+            ui.resultado({ titulo: 'Imóvel dividido', sucesso: novos.map((x) => `${x.codigo} · plaqueta ${x.plaqueta} · ${x.descricao} · ${u.moeda(eventos.find((e) => e.bemId === x.id)?.valor || 0)}`), falhas: [], extra: `<p>O imóvel ${esc(b.codigo)} foi baixado como "Desmembramento".</p>` });
+            depois && depois();
+          }
+        }), 50);
+        return null;
+      }
+    });
+  };
+  E.remembrar = (b, depois) => ui.formulario({
+    titulo: 'Juntar imóveis (remembramento) — ' + b.descricao, largura: 'media', textoSalvar: 'Juntar',
+    intro: '<p class="aviso-inline">Os terrenos foram unidos numa matrícula só. O sistema cria <b>um imóvel novo</b> com a soma das áreas e dos valores contábeis, e dá baixa nos originais como "Remembramento". Nada é apagado. <b>Confira com a contabilidade</b> antes de confirmar. (Para o mesmo bem cadastrado duas vezes, use "Unir cadastros".)</p>',
+    campos: [{ chave: 'outros', rotulo: 'Códigos ou plaquetas dos outros imóveis (separe com vírgula)', obrigatorio: true },
+      { chave: 'descricao', rotulo: 'Nome do imóvel novo', obrigatorio: true }, { chave: 'matricula', rotulo: 'Matrícula nova', largura: 'meia' },
+      { chave: 'data', rotulo: 'Data', tipo: 'data', obrigatorio: true, largura: 'meia' }, { chave: 'documento', rotulo: 'Documento (decreto, registro do remembramento)', obrigatorio: true }],
+    valores: { descricao: b.descricao, data: hoje() },
+    salvar: async (v) => {
+      const faixa = u.faixas(v.outros), pls = new Set(String(v.outros).split(/[;,\s]+/).filter(Boolean));
+      const outros = VP.db.lista('bens').filter((x) => x.id !== b.id && !x.excluido && ((faixa && faixa(x.codigo)) || pls.has(String(x.plaqueta))));
+      if (!outros.length) return 'Nenhum imóvel encontrado com esses códigos ou plaquetas.';
+      const todos = [b, ...outros];
+      const ruim = todos.filter((x) => x.tipo !== 'imovel' || x.status === 'baixado');
+      if (ruim.length) return `Só imóveis ativos podem ser juntados: ${ruim.map((x) => x.codigo).join(', ')}.`;
+      if (new Set(todos.map((x) => x.entidadeId || '')).size > 1) return 'Os imóveis são de entidades diferentes (prefeitura e fundo). Transfira antes para a mesma entidade.';
+      if (todos.some((x) => v.data < (x.dataIncorporacao || ''))) return 'A data não pode ser antes da incorporação de nenhum dos imóveis.';
+      const valores = todos.map((x) => VP.saldo(x, v.data).liquidoAntesDaBaixa);
+      const total = r2(valores.reduce((t, x) => t + x, 0));
+      const area = todos.every((x) => x.imovel?.areaTerreno) ? r2(todos.reduce((t, x) => t + Number(x.imovel.areaTerreno), 0)) : null;
+      const { nb, eventos } = montarImovel(b, { descricao: v.descricao, data: v.data, valor: total, situacao: 'Remembramento', origemTexto: `remembramento dos imóveis ${todos.map((x) => x.codigo).join(', ')}`, matricula: v.matricula, area, origens: todos.map((x) => x.id), vida: Math.max(...todos.map(vidaRestante)), historico: `Veio do remembramento dos imóveis ${todos.map((x) => x.codigo).join(', ')} (${v.documento}).` });
+      const baixas = todos.map((x, i) => { x.status = 'baixado'; x.imovel.remembradoEm = nb.id; return VP.novoEvento(x.id, 'baixa', { data: v.data, valor: valores[i], descricao: `Baixa — Remembramento no imóvel ${nb.codigo}`, extra: { tipoBaixa: 'Remembramento', motivo: 'Remembramento', documento: v.documento, destinoIds: [nb.id] } }); });
+      await VP.db.gravarVarias({ bens: [...todos, nb], eventos: [...baixas, ...eventos] });
+      ui.resultado({ titulo: 'Imóveis juntados', sucesso: [`Novo: ${nb.codigo} · plaqueta ${nb.plaqueta} · ${nb.descricao} · ${u.moeda(total)}${area ? ` · ${u.inteiro(area)} m²` : ''}`], falhas: [], extra: `<p>Baixados como "Remembramento": ${esc(todos.map((x) => x.codigo).join(', '))}.</p>` });
+      depois && depois();
+    }
+  });
   E.novaPendencia = (b, depois) => ui.formulario({
     titulo: 'Pendência de regularização — ' + b.descricao, largura: 'media',
     campos: [{ chave: 'descricao', rotulo: 'O que precisa ser feito (ex.: retificar matrícula, obter habite-se)', tipo: 'area', obrigatorio: true },
@@ -338,6 +454,10 @@
     const a = E.alertas();
     const porSit = E.SITUACOES_REG.map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.situacaoRegistro === s).length, link: '#painel-imoveis/demonstrativo?gerar=1' }));
     const porUso = VP.LISTAS.usosImovel.map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.uso === s).length }));
+    // aviso de reavaliação (livro: a cada 3 a 5 anos se o valor não muda muito): usa o mesmo prazo das Configurações
+    const anosReav = VP.config().reavaliacaoAnos || 4;
+    const limReav = `${Number(hoje().slice(0, 4)) - anosReav}${hoje().slice(4)}`;
+    const semReav = imo.filter((b) => { const s = VP.saldo(b); return s.marco && s.marco.data < limReav; });
     const lista = (titulo, itens, fmt) => (itens.length ? `<h4>${esc(titulo)} (${itens.length})</h4><ul class="lista-simples">${itens.slice(0, 8).map(fmt).join('')}${itens.length > 8 ? '<li>…</li>' : ''}</ul>` : '');
     return {
       titulo: 'Bens imóveis',
@@ -350,7 +470,8 @@
           ${lista('Documentos vencidos', a.docsVencidos, (d) => `<li>${nomeBem(d.bemId)} · ${esc(d.tipo)} venceu em ${u.data(d.validade)}</li>`)}
           ${lista('Cessões vencidas', a.cessoesVencidas, (c) => `<li>${nomeBem(c.bemId)} · ${esc(E.TIPOS_CESSAO[c.tipo])} ${c.direcao === 'a-terceiros' ? 'a' : 'de'} ${esc(c.parte)} venceu em ${u.data(c.fim)}</li>`)}
           ${lista('Pendências atrasadas', a.pendAtrasadas, (p) => `<li>${nomeBem(p.bemId)} · ${esc(p.descricao)} · prazo ${u.data(p.prazo)}</li>`)}
-          ${!a.semMotivo.length && !a.semRegistroSemPendencia.length && !a.docsVencidos.length && !a.cessoesVencidas.length && !a.pendAtrasadas.length ? '<p class="tudo-certo">✓ Nada pendente.</p>' : ''}</section>
+          ${lista(`Sem reavaliação há mais de ${anosReav} anos (Configurações)`, semReav, (b) => `<li><a href="#bem/${esc(b.id)}">${esc(b.codigo)} · ${esc(b.descricao)}</a> · última: ${u.data(VP.saldo(b).marco?.data)}</li>`)}
+          ${!a.semMotivo.length && !a.semRegistroSemPendencia.length && !a.docsVencidos.length && !a.cessoesVencidas.length && !a.pendAtrasadas.length && !semReav.length ? '<p class="tudo-certo">✓ Nada pendente.</p>' : ''}</section>
         <section class="cartao"><h3>Fluxo de regularização (DOSSIE.md A2.12)</h3><ol class="lista-simples"><li>Levantamento: cruzar cadastro do IPTU, mapas, loteamentos aprovados e o cadastro patrimonial.</li><li>Vistoria com foto e GPS de cada imóvel (aplicativo de campo).</li><li>Pesquisa no cartório e situação do registro com o motivo.</li><li>Pendência por imóvel irregular, com responsável e prazo.</li><li>Avaliação pela comissão e incorporação contábil.</li><li>Demonstrativo para o TCE/SC: registrados, em regularização, sem registro e motivo.</li></ol></section>`,
       ligar() {}
     };

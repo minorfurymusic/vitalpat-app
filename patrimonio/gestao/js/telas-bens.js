@@ -263,6 +263,7 @@
         <button class="botao" data-acao="replicar">Replicar</button>
         <button class="botao" data-acao="recebimento">Recebimento</button>
         <button class="botao" data-acao="unir" title="O mesmo bem tem dois cadastros (duas plaquetas)">Unir cadastros</button>
+        ${VP.imoveis && VP.imoveis.ehImovel(b) && b.tipo === 'imovel' ? '<button class="botao" data-acao="baixaParcial" title="Perda de área ou demolição de parte">Baixa parcial</button> <button class="botao" data-acao="desmembrar" title="Dividir em dois ou mais imóveis">Dividir imóvel</button> <button class="botao" data-acao="remembrar" title="Juntar com outros imóveis num só">Juntar imóveis</button>' : ''}
         <button class="botao" data-acao="baixa">Baixa</button>`}
         <button class="botao" data-acao="imprimir">Imprimir ficha</button>
         <button class="botao" data-acao="etiqueta">Etiqueta</button>
@@ -324,6 +325,9 @@
           if (a === 'melhoria') return A.melhoria(b, recarrega);
           if (a === 'replicar') return A.replicar(b, recarrega);
           if (a === 'unir') return VP.unirCadastros.abrir(b);
+          if (a === 'baixaParcial') return VP.imoveis.baixaParcial(b, recarrega);
+          if (a === 'desmembrar') return VP.imoveis.desmembrar(b, recarrega);
+          if (a === 'remembrar') return VP.imoveis.remembrar(b, recarrega);
           if (a === 'recebimento') return VP.termos.recebimento([b], recarrega);
           if (a === 'unidades') return A.unidadesProduzidas(b, recarrega);
           return A.lote(a === 'reavaliar' ? 'reavaliar' : a, um, recarrega);
@@ -1117,7 +1121,7 @@
       titulo: `Baixa — ${bens.length} bem(ns)`, largura: 'media', textoSalvar: 'Dar baixa',
       intro: `<p class="aviso-inline">A baixa tira o bem do patrimônio (valor contábil vai a zero). Venda e doação exigem interesse público justificado e avaliação prévia; imóveis exigem também lei autorizativa (Lei 14.133/2021, art. 76).</p><p>Valor contábil que sai: <b>${u.moeda(bens.reduce((t, b) => t + VP.saldo(b).liquido, 0))}</b></p>`,
       campos: [
-        { chave: 'tipoBaixa', rotulo: 'Tipo de baixa', tipo: 'select', opcoes: L.tiposBaixa.map((x) => [x, x]), obrigatorio: true },
+        { chave: 'tipoBaixa', rotulo: 'Tipo de baixa', tipo: 'select', opcoes: L.tiposBaixa.concat(bens.every((b) => b.tipo === 'imovel') ? L.tiposBaixaImovel : []).map((x) => [x, x]), obrigatorio: true },
         { chave: 'motivo', rotulo: 'Motivo', tipo: 'select', opcoes: VP.db.lista('motivos').filter((m) => m.tipo === 'baixa').map((m) => [m.nome, m.nome]), obrigatorio: true },
         { chave: 'data', rotulo: 'Data', tipo: 'data', padrao: VP.Plataforma.hoje(), obrigatorio: true, largura: 'meia' },
         { chave: 'documento', rotulo: 'Processo / laudo / boletim de ocorrência', largura: 'meia' },
@@ -1125,8 +1129,9 @@
         { chave: 'avaliacao', rotulo: 'Avaliação prévia (laudo nº)', largura: 'meia' },
         { chave: 'justificativa', rotulo: 'Justificativa de interesse público', tipo: 'area' }],
       salvar: async (v) => {
-        const precisaDoc = ['Alienação (leilão)', 'Doação', 'Permuta'].includes(v.tipoBaixa);
-        if (precisaDoc && (!v.avaliacao || !v.justificativa)) return 'Venda, doação e permuta exigem avaliação prévia e justificativa (Lei 14.133, art. 76).';
+        const precisaDoc = ['Alienação (leilão)', 'Doação', 'Permuta', 'Dação em pagamento', 'Investidura', 'Venda a outro órgão ou entidade pública'].includes(v.tipoBaixa);
+        if (v.tipoBaixa === 'Demolição' && !v.documento) return 'Demolição: informe o laudo, o alvará de demolição ou o processo.';
+        if (precisaDoc && (!v.avaliacao || !v.justificativa)) return 'Venda, doação, permuta, dação, investidura e venda a outro órgão exigem avaliação prévia e justificativa (Lei 14.133, art. 76).';
         if (['Furto / roubo', 'Extravio'].includes(v.tipoBaixa) && !v.documento) return 'Informe o boletim de ocorrência ou o processo.';
         const { ok, falhas } = separarBaixados(bens);
         const validos = [];

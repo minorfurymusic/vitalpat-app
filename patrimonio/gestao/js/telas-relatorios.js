@@ -68,7 +68,7 @@
       const linhas = bens.map((b) => {
         const evs = VP.eventosDoBem(b.id).filter((e) => e.data >= f.de && e.data <= f.ate);
         const ent = evs.filter((e) => e.tipo === 'incorporacao' || e.tipo === 'agregacao' || (e.tipo === 'reavaliacao' && e.valor > 0)).reduce((t, e) => t + (e.valor || 0), 0);
-        const sai = evs.filter((e) => e.tipo === 'baixa' || (e.tipo === 'reavaliacao' && e.valor < 0)).reduce((t, e) => t + Math.abs(e.valor || 0), 0);
+        const sai = evs.filter((e) => e.tipo === 'baixa' || e.tipo === 'baixaParcial' || (e.tipo === 'reavaliacao' && e.valor < 0)).reduce((t, e) => t + Math.abs(e.valor || 0), 0);
         const dep = evs.filter((e) => e.tipo === 'depreciacao').reduce((t, e) => t + e.valor, 0);
         return { bem: b, id: b.id, conta: b.contaId, anterior: VP.saldo(b, antes).liquido, entradas: ent, saidas: sai, depreciacao: dep, final: VP.saldo(b, f.ate).liquido };
       });
@@ -223,10 +223,10 @@
   R.baixas = {
     grupo: 'Movimentação', titulo: 'Baixas', descricao: 'O que saiu do patrimônio, por motivo, tipo e mês.',
     filtros: ['de', 'ate', 'tipo', 'unidadeId', 'contaId', 'classificacaoId'], padrao: () => ({ de: inicioAno(), ate: hoje() }),
-    extras: [{ chave: 'tipoBaixa', rotulo: 'Tipo de baixa', tipo: 'select', opcoes: L.tiposBaixa.map((x) => [x, x]) }],
+    extras: [{ chave: 'tipoBaixa', rotulo: 'Tipo de baixa', tipo: 'select', opcoes: L.tiposBaixa.concat(L.tiposBaixaImovel, ['Baixa parcial', 'Desmembramento', 'Remembramento']).map((x) => [x, x]) }],
     gerar(f) {
-      let evs = eventosNoPeriodo(f, ['baixa']);
-      if (f.tipoBaixa) evs = evs.filter((e) => e.dados.tipoBaixa === f.tipoBaixa);
+      let evs = eventosNoPeriodo(f, ['baixa', 'baixaParcial']);
+      if (f.tipoBaixa) evs = evs.filter((e) => (e.tipo === 'baixaParcial' ? 'Baixa parcial' : e.dados.tipoBaixa) === f.tipoBaixa);
       return {
         resumo: [G.numero('Bens baixados', u.inteiro(evs.length)), G.numero('Valor que saiu', u.moedaCurta(evs.reduce((t, e) => t + e.valor, 0)))],
         graficos: [{ titulo: 'Por motivo', html: G.barrasH([...u.agruparSoma(evs, (e) => e.dados.motivo)].map(([k, n]) => ({ rotulo: k, valor: n }))) }, { titulo: 'Por tipo de baixa', html: G.barrasH([...u.agruparSoma(evs, (e) => e.dados.tipoBaixa)].map(([k, n]) => ({ rotulo: k, valor: n }))) }, { titulo: 'Por mês', html: G.colunas(porMes(evs, f.de || inicioAno(), f.ate || hoje(), () => 1)) }],

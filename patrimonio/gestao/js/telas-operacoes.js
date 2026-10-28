@@ -702,8 +702,9 @@
     const linhaContabil = (e) => {
       const b = VP.db.pega('bens', e.bemId) || {};
       const dc = b.depreciacao || {};
-      const deb = e.tipo === 'depreciacao' ? dc.contaDebito : e.tipo === 'baixa' ? dc.contaCredito : b.contaId;
-      const cred = e.tipo === 'depreciacao' ? dc.contaCredito : e.tipo === 'baixa' ? b.contaId : '';
+      const sai = e.tipo === 'baixa' || e.tipo === 'baixaParcial';
+      const deb = e.tipo === 'depreciacao' ? dc.contaDebito : sai ? dc.contaCredito : b.contaId;
+      const cred = e.tipo === 'depreciacao' ? dc.contaCredito : sai ? b.contaId : '';
       return [u.data(e.data), L.eventos[e.tipo].nome, b.codigo, b.descricao, VP.db.pega('contas', deb)?.codigo || '', VP.db.pega('contas', cred)?.codigo || '', Math.abs(e.valor || 0), VP.nome('entidades', b.entidadeId)];
     };
     return {

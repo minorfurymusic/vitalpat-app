@@ -48,6 +48,8 @@
       if (e.tipo === 'incorporacao') { base = e.valor || 0; acumuladaCiclo = 0; marco = e; }
       else if (e.tipo === 'reavaliacao') { base = e.dados.valorNovo ?? e.valor ?? base; acumuladaCiclo = 0; marco = e; }
       else if (e.tipo === 'agregacao') { base += e.valor || 0; agregado += e.valor || 0; }
+      // baixa parcial (imóvel): sai a mesma fração do valor e da depreciação acumulada do ciclo
+      else if (e.tipo === 'baixaParcial') { const f = Math.min(1, Math.max(0, Number(e.dados.fracao) || 0)); base = r2(base - base * f); acumuladaCiclo = r2(acumuladaCiclo - acumuladaCiclo * f); }
       else if (e.tipo === 'depreciacao') { acumuladaCiclo += e.valor || 0; acumuladaTotal += e.valor || 0; }
       else if (e.tipo === 'baixa') { baixado = e; }
     }

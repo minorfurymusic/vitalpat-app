@@ -156,6 +156,59 @@
       ui.aviso('Encerrada.'); depois && depois();
     }
   });
+  // ------------------------------------------------------------------ benfeitorias (livro 4.2, págs. 299, 313–318 e 351–354; etapa 3, 28/10/2026)
+  // Classes do Código Civil, art. 96: necessárias (conservam o bem), úteis (aumentam ou facilitam o uso), voluptuárias (só embelezam ou dão conforto).
+  E.CLASSES_BENF = { necessaria: 'Necessária (conserva o imóvel ou evita que se deteriore)', util: 'Útil (aumenta ou facilita o uso)', voluptuaria: 'Voluptuária (só embelezamento ou conforto)' };
+  E.CLASSES_BENF_CURTO = { necessaria: 'Necessária', util: 'Útil', voluptuaria: 'Voluptuária' };
+  // Construções que existem no terreno (Folha de Tombo: nome, pavimentos, área coberta, dependências). "Excluir" = Lixeira (fica guardada).
+  E.benfeitoriasDe = (b) => (b.imovel?.benfeitorias || []).filter((x) => !x.excluido);
+  E.editarBenfeitoria = (b, depois, x0 = null) => ui.formulario({
+    titulo: (x0 ? 'Editar construção — ' : 'Construção no terreno — ') + b.descricao, largura: 'media',
+    intro: '<p class="ajuda">Cada prédio, galpão, quadra coberta ou outra construção que existe neste terreno. Serve para a Folha de Tombo. O valor do imóvel só muda pelo botão <b>Melhoria</b> ou por reavaliação.</p>',
+    campos: [{ chave: 'nome', rotulo: 'Nome (ex.: Bloco A, Ginásio, Casa do zelador)', obrigatorio: true },
+      { chave: 'pavimentos', rotulo: 'Nº de pavimentos', tipo: 'numero', largura: 'meia' }, { chave: 'dependencias', rotulo: 'Nº de dependências (salas, cômodos)', tipo: 'numero', largura: 'meia' },
+      { chave: 'areaConstruida', rotulo: 'Área construída (m²)', tipo: 'numero', largura: 'meia' }, { chave: 'areaCoberta', rotulo: 'Área coberta (m²)', tipo: 'numero', largura: 'meia' },
+      { chave: 'ano', rotulo: 'Ano da construção', tipo: 'numero', largura: 'meia' }, { chave: 'residencial', rotulo: 'Residencial ou não', tipo: 'select', opcoes: ['Residencial', 'Não residencial'].map((v) => [v, v]), largura: 'meia' },
+      { chave: 'observacao', rotulo: 'Observação', tipo: 'area' }],
+    valores: x0 || {},
+    salvar: async (v) => {
+      if (v.ano && (v.ano < 1500 || v.ano > Number(hoje().slice(0, 4)))) return 'Ano da construção fora do esperado.';
+      const im = b.imovel || (b.imovel = {});
+      const lista = im.benfeitorias || (im.benfeitorias = []);
+      const antes = x0 ? JSON.stringify(x0) : '';
+      const x = x0 || { id: u.id(), criadoEm: agora(), usuario: usuario() };
+      Object.assign(x, v);
+      if (!x0) lista.push(x);
+      await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'alteracao', { descricao: `${x0 ? 'Construção alterada' : 'Construção registrada'}: ${v.nome}${v.areaConstruida ? ` (${v.areaConstruida} m²)` : ''}`, extra: { benfeitoriaId: x.id, antes } })] });
+      ui.aviso('Construção salva.'); depois && depois();
+    }
+  });
+  E.excluirBenfeitoria = (b, x, depois) => ui.formulario({
+    titulo: 'Mover para a Lixeira — ' + x.nome, largura: 'pequena', textoSalvar: 'Mover para a Lixeira',
+    intro: '<p class="ajuda">A construção sai da ficha, mas fica guardada no histórico. Ex.: prédio demolido (a baixa do valor é feita à parte).</p>',
+    campos: [{ chave: 'motivo', rotulo: 'Motivo', tipo: 'area', obrigatorio: true }],
+    salvar: async (v) => {
+      x.excluido = true; x.excluidoEm = agora(); x.motivoExclusao = v.motivo;
+      await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'alteracao', { descricao: `Construção movida para a Lixeira: ${x.nome} · ${v.motivo}`, extra: { benfeitoriaId: x.id } })] });
+      ui.aviso('Movida para a Lixeira.'); depois && depois();
+    }
+  });
+  // Benfeitoria feita pela prefeitura em imóvel de terceiros (locação, comodato recebido): fica registrada na cessão e não soma ao valor do imóvel.
+  E.benfeitoriaEmTerceiros = (b, c, depois) => ui.formulario({
+    titulo: `Benfeitoria no imóvel de ${c.parte}`, largura: 'media',
+    intro: '<p class="aviso-inline">O imóvel é de terceiros: a benfeitoria <b>não soma</b> ao valor deste cadastro. Ela fica registrada aqui, com o valor e se o dono deve indenizar, para cobrar na devolução. <b>Comunique o dono</b> por escrito, conforme o contrato.</p>',
+    campos: [{ chave: 'descricao', rotulo: 'O que foi feito', tipo: 'area', obrigatorio: true },
+      { chave: 'classe', rotulo: 'Tipo de benfeitoria (Código Civil, art. 96)', tipo: 'select', opcoes: Object.entries(E.CLASSES_BENF), obrigatorio: true },
+      { chave: 'valor', rotulo: 'Valor (R$)', tipo: 'moeda', obrigatorio: true, largura: 'meia' }, { chave: 'data', rotulo: 'Data', tipo: 'data', obrigatorio: true, padrao: hoje(), largura: 'meia' },
+      { chave: 'indenizavel', rotulo: 'O dono deve indenizar?', tipo: 'select', opcoes: [['sim', 'Sim (o contrato prevê)'], ['nao', 'Não'], ['conferir', 'A conferir no contrato']], vazio: false, largura: 'meia' },
+      { chave: 'documento', rotulo: 'Documento (nota, contrato, ofício ao dono)', largura: 'meia' }],
+    salvar: async (v) => {
+      const x = Object.assign({ id: u.id(), criadoEm: agora(), usuario: usuario() }, v);
+      c.benfeitorias = (c.benfeitorias || []).concat(x);
+      await VP.db.gravarVarias({ cessoesImovel: [c], eventos: [evento(b, `Benfeitoria ${E.CLASSES_BENF_CURTO[v.classe].toLowerCase()} no imóvel de ${c.parte}: ${v.descricao} · ${u.moeda(v.valor)} · indenizável: ${{ sim: 'sim', nao: 'não', conferir: 'a conferir' }[v.indenizavel]}`, { cessaoId: c.id, benfeitoriaId: x.id })] });
+      ui.aviso('Benfeitoria registrada.'); depois && depois();
+    }
+  });
   E.novaPendencia = (b, depois) => ui.formulario({
     titulo: 'Pendência de regularização — ' + b.descricao, largura: 'media',
     campos: [{ chave: 'descricao', rotulo: 'O que precisa ser feito (ex.: retificar matrícula, obter habite-se)', tipo: 'area', obrigatorio: true },
@@ -194,6 +247,13 @@
       ${['Básico', 'Complementar'].map((g) => `<h4>${g === 'Básico' ? 'Básicos' : 'Complementares'}</h4><ul class="lista-conferencia">${c.itens.filter((i) => i.grupo === g).map(linha).join('')}</ul>`).join('')}
       <p class="ajuda">"Tem" = há documento desse tipo em "Documentos do imóvel". Marque "Não se aplica" quando o documento não existe para este imóvel (ex.: termo de obras em terreno sem construção).</p></section>`;
   };
+  const cartaoConstrucoes = (b, pode) => {
+    const l = E.benfeitoriasDe(b);
+    const n = (v, suf = '') => (v || v === 0 ? Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + suf : '');
+    return `<section class="cartao secao" id="sec-construcoes"><header><h3>Construções no terreno (benfeitorias)</h3>${pode ? '<button class="botao pequeno" data-benf-nova>+ Construção</button>' : ''}</header>
+      ${l.length ? `<ul class="lista-conferencia">${l.map((x) => `<li><span class="conf-nome"><b>${esc(x.nome)}</b>${[x.pavimentos ? n(x.pavimentos) + ' pavimento(s)' : '', x.dependencias ? n(x.dependencias) + ' dependência(s)' : '', x.areaConstruida ? n(x.areaConstruida, ' m² construídos') : '', x.areaCoberta ? n(x.areaCoberta, ' m² cobertos') : '', x.ano ? 'de ' + x.ano : '', x.residencial || ''].filter(Boolean).map((t) => ' · ' + esc(t)).join('')}</span>${pode ? `<span class="conf-acoes"><button class="botao pequeno" data-benf-editar="${esc(x.id)}">Editar</button> <button class="botao pequeno" data-benf-excluir="${esc(x.id)}">Excluir</button></span>` : ''}</li>`).join('')}</ul>
+        <p class="ajuda">${l.length} construção(ões) · ${n(l.reduce((t, x) => t + (Number(x.areaConstruida) || 0), 0), ' m² construídos')} no total.</p>` : '<p class="vazio">Nenhuma construção registrada. Terreno vazio, ou ainda não cadastrado.</p>'}</section>`;
+  };
   E.secoesFicha = (b) => {
     const docs = E.docsDe(b.id), ces = E.cessoesDe(b.id), pend = E.pendenciasDe(b.id);
     const arq = (l) => (l || []).filter((a) => a.dataURL).map((a) => `<a href="${esc(a.dataURL)}" target="_blank" rel="noopener" download="${esc(a.nome || 'documento')}">${esc(a.nome || 'arquivo')}</a>`).join(' ');
@@ -208,11 +268,12 @@
       ${VP.aguaLuz ? VP.aguaLuz.cartaoDoBem(b) : ''}
       <section class="cartao secao" id="sec-local-imovel"><header><h3>Localização no mapa</h3><button class="botao pequeno" data-local-imovel>${temLocal ? 'Alterar' : 'Informar'}</button></header>
         ${temLocal ? `<p>${esc(b.imovel.lat)}, ${esc(b.imovel.lon)} · <a href="https://www.google.com/maps/search/?api=1&query=${esc(b.imovel.lat)},${esc(b.imovel.lon)}" target="_blank" rel="noopener">Abrir no Google Maps</a> · <a href="#imoveis/mapa">Ver no mapa dos imóveis</a></p>` : '<p class="vazio">Sem localização. Informe para o imóvel aparecer no mapa e no relatório com mapa.</p>'}</section>
-      <section class="cartao secao" id="sec-docs-imovel"><header><h3>Documentos do imóvel</h3><button class="botao pequeno" data-imo="doc">+ Documento</button></header>
+      <section class="cartao secao" id="sec-docs-imovel"><header><h3>Documentos do imóvel</h3><span>${VP.imoveisImpressos ? '<button class="botao pequeno" data-imo-impressos>Gerar documento</button> ' : ''}<button class="botao pequeno" data-imo="doc">+ Documento</button></span></header>
         ${docs.length ? `<ul class="lista-simples">${docs.map((d) => `<li>${seloDoc(d)} <b>${esc(d.tipo)}</b>${d.numero ? ' ' + esc(d.numero) : ''}${d.validade ? ' · validade ' + u.data(d.validade) : ''}${d.orgao ? ' · ' + esc(d.orgao) : ''} ${arq(d.arquivos)} <button class="botao pequeno" data-imo-doc="${esc(d.id)}">Atualizar</button></li>`).join('')}</ul>` : '<p class="vazio">Nenhum documento. Ex.: matrícula, habite-se, AVCB, alvarás, laudos.</p>'}</section>
       ${cartaoConferencia(b, pode)}
+      ${cartaoConstrucoes(b, pode)}
       <section class="cartao secao"><header><h3>Cessões e uso por terceiros</h3><button class="botao pequeno" data-imo="cessao">+ Registrar</button></header>
-        ${ces.length ? `<ul class="lista-simples">${ces.map((c) => `<li>${seloCessao(c)} <b>${esc(E.TIPOS_CESSAO[c.tipo])}</b> ${c.direcao === 'a-terceiros' ? 'a' : 'de'} ${esc(c.parte)} · ${u.data(c.inicio)} a ${c.fim ? u.data(c.fim) : 'indeterminado'}${c.instrumento ? ' · ' + esc(c.instrumento) : ''}${c.valor ? ' · ' + u.moeda(c.valor) + '/mês' : ''} ${!c.encerradaEm ? `<button class="botao pequeno" data-imo-renovar="${esc(c.id)}">Renovar</button> <button class="botao pequeno" data-imo-encerrar="${esc(c.id)}">Encerrar</button>` : ''}</li>`).join('')}</ul>` : '<p class="vazio">Nenhuma.</p>'}</section>
+        ${ces.length ? `<ul class="lista-simples">${ces.map((c) => `<li>${seloCessao(c)} <b>${esc(E.TIPOS_CESSAO[c.tipo])}</b> ${c.direcao === 'a-terceiros' ? 'a' : 'de'} ${esc(c.parte)} · ${u.data(c.inicio)} a ${c.fim ? u.data(c.fim) : 'indeterminado'}${c.instrumento ? ' · ' + esc(c.instrumento) : ''}${c.valor ? ' · ' + u.moeda(c.valor) + '/mês' : ''} ${!c.encerradaEm ? `<button class="botao pequeno" data-imo-renovar="${esc(c.id)}">Renovar</button> <button class="botao pequeno" data-imo-encerrar="${esc(c.id)}">Encerrar</button>` : ''}${c.direcao === 'de-terceiros' && !c.encerradaEm && pode ? ` <button class="botao pequeno" data-imo-benf-ces="${esc(c.id)}">+ Benfeitoria</button>` : ''}${(c.benfeitorias || []).length ? `<ul class="lista-simples">${c.benfeitorias.map((x) => `<li>Benfeitoria ${esc(E.CLASSES_BENF_CURTO[x.classe] || '').toLowerCase()}: ${esc(x.descricao)} · ${u.moeda(x.valor)} · ${u.data(x.data)} · indenizável: ${({ sim: 'sim', nao: 'não', conferir: 'a conferir' })[x.indenizavel] || '—'}</li>`).join('')}<li><b>Total: ${u.moeda(c.benfeitorias.reduce((t, x) => t + (Number(x.valor) || 0), 0))}</b></li></ul>` : ''}</li>`).join('')}</ul>` : '<p class="vazio">Nenhuma.</p>'}</section>
       <section class="cartao secao"><header><h3>Regularização</h3><button class="botao pequeno" data-imo="pendencia">+ Pendência</button></header>
         <p>Situação do registro: <b>${esc(b.imovel?.situacaoRegistro || '—')}</b>${b.imovel?.motivoPendencia ? ` · ${esc(b.imovel.motivoPendencia)}` : ''}</p>
         ${pend.length ? `<ul class="lista-simples">${pend.map((p) => `<li>${E.pendAberta(p) ? (E.pendAtrasada(p) ? selo('ruim', 'Atrasada') : selo('regular', 'Aberta')) : selo('bom', p.situacao === 'resolvida' ? 'Resolvida' : 'Cancelada')} ${esc(p.descricao)} · ${esc(VP.nome('responsaveis', p.responsavelId))} · prazo ${u.data(p.prazo)} ${E.pendAberta(p) ? `<button class="botao pequeno" data-imo-pend="${esc(p.id)}">Andamento</button>` : ''}</li>`).join('')}</ul>` : '<p class="vazio">Nenhuma pendência.</p>'}</section>`;
@@ -227,6 +288,12 @@
     area.querySelectorAll('[data-conf-na]').forEach((el) => el.addEventListener('click', () => E.marcarNaoAplica(b, el.dataset.confNa, true, re)));
     area.querySelectorAll('[data-conf-volta]').forEach((el) => el.addEventListener('click', () => E.marcarNaoAplica(b, el.dataset.confVolta, false, re)));
     area.querySelector('[data-copiar-confrontacoes]')?.addEventListener('click', () => E.copiarConfrontacoes(b, re));
+    area.querySelector('[data-benf-nova]')?.addEventListener('click', () => E.editarBenfeitoria(b, re));
+    area.querySelector('[data-imo-impressos]')?.addEventListener('click', () => VP.imoveisImpressos.escolher(b, re));
+    const benf = (id) => (b.imovel?.benfeitorias || []).find((x) => x.id === id);
+    area.querySelectorAll('[data-benf-editar]').forEach((el) => el.addEventListener('click', () => E.editarBenfeitoria(b, re, benf(el.dataset.benfEditar))));
+    area.querySelectorAll('[data-benf-excluir]').forEach((el) => el.addEventListener('click', () => E.excluirBenfeitoria(b, benf(el.dataset.benfExcluir), re)));
+    area.querySelectorAll('[data-imo-benf-ces]').forEach((el) => el.addEventListener('click', () => E.benfeitoriaEmTerceiros(b, VP.db.pega('cessoesImovel', el.dataset.imoBenfCes), re)));
     area.querySelectorAll('[data-imo-doc]').forEach((el) => el.addEventListener('click', () => E.novoDocumento(b, re, VP.db.pega('documentosImovel', el.dataset.imoDoc))));
     area.querySelectorAll('[data-imo-renovar]').forEach((el) => el.addEventListener('click', () => E.renovarCessao(b, VP.db.pega('cessoesImovel', el.dataset.imoRenovar), re)));
     area.querySelectorAll('[data-imo-encerrar]').forEach((el) => el.addEventListener('click', () => E.encerrarCessao(b, VP.db.pega('cessoesImovel', el.dataset.imoEncerrar), re)));

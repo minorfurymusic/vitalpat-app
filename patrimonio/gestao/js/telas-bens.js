@@ -1202,14 +1202,16 @@
   });
   A.melhoria = (b, depois) => {
     const s = VP.saldo(b);
+    const ehImovel = !!(VP.imoveis && VP.imoveis.ehImovel(b));
     ui.formulario({
       titulo: 'Melhoria (agregação de valor)', largura: 'media', textoSalvar: 'Somar ao valor',
-      intro: `<p class="aviso-inline"><b>Melhoria</b> aumenta capacidade, vida útil ou serviço (ex.: ampliação, troca de toda a tubulação, recapeamento completo) e soma ao valor. <b>Manutenção</b> só mantém o bem (limpeza, conserto, <b>pintura comum</b>) e <b>não</b> aumenta o valor. Na dúvida, registre como manutenção.</p><p>Valor contábil hoje: <b>${u.moeda(s.liquido)}</b></p>`,
+      intro: `<p class="aviso-inline"><b>Melhoria</b> aumenta capacidade, vida útil ou serviço (ex.: ampliação, troca de toda a tubulação, recapeamento completo) e soma ao valor. <b>Manutenção</b> só mantém o bem (limpeza, conserto, <b>pintura comum</b>) e <b>não</b> aumenta o valor. Na dúvida, registre como manutenção.</p>${ehImovel ? '<p class="aviso-inline"><b>Instalações</b> que podem ser retiradas (divisórias, ar-condicionado, móveis planejados soltos) <b>não</b> somam ao imóvel: cadastre como <b>bem móvel</b>, com plaqueta própria.</p>' : ''}<p>Valor contábil hoje: <b>${u.moeda(s.liquido)}</b></p>`,
       campos: [
         { chave: 'tipoGasto', rotulo: 'Este gasto é', tipo: 'select', opcoes: [['melhoria', 'Melhoria — aumenta valor ou vida útil'], ['manutencao', 'Manutenção — só mantém (registrar como despesa)']], vazio: false },
         { chave: 'valor', rotulo: 'Valor (R$)', tipo: 'moeda', obrigatorio: true, largura: 'meia' }, { chave: 'data', rotulo: 'Data', tipo: 'data', padrao: VP.Plataforma.hoje(), obrigatorio: true, largura: 'meia' },
         { chave: 'vidaUtilMeses', rotulo: 'Nova vida útil restante (meses, opcional)', tipo: 'numero' },
         { chave: 'descricao', rotulo: 'O que foi feito', tipo: 'area', obrigatorio: true },
+        ...(ehImovel ? [{ chave: 'classeBenfeitoria', rotulo: 'Tipo de benfeitoria (Código Civil, art. 96)', tipo: 'select', opcoes: Object.entries(VP.imoveis.CLASSES_BENF), ajuda: 'Só para melhoria. Ex.: troca do telhado = necessária; nova sala = útil; jardim decorativo = voluptuária.' }] : []),
         { chave: 'documento', rotulo: 'Documento (nota, medição, contrato)' },
         { chave: 'aprovado', rotulo: 'Setor contábil aprovou somar ao valor', tipo: 'bool' }],
       salvar: async (v) => {
@@ -1219,9 +1221,10 @@
           return depois();
         }
         if (!v.aprovado) return 'Melhoria só soma ao valor com aprovação do setor contábil.';
+        if (ehImovel && !v.classeBenfeitoria) return 'Escolha o tipo de benfeitoria (necessária, útil ou voluptuária).';
         // nova vida útil = meses já passados no ciclo + meses que ainda faltam (informados)
         if (v.vidaUtilMeses && s.inicio) b.depreciacao.vidaUtilMeses = Math.max(0, u.mesesEntre(s.inicio, v.data.slice(0, 7))) + Math.floor(v.vidaUtilMeses);
-        await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'agregacao', { data: v.data, valor: v.valor, descricao: v.descricao, extra: { documento: v.documento, tipoGasto: 'melhoria' } })] });
+        await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'agregacao', { data: v.data, valor: v.valor, descricao: v.descricao + (v.classeBenfeitoria ? ` (benfeitoria ${VP.imoveis.CLASSES_BENF_CURTO[v.classeBenfeitoria].toLowerCase()})` : ''), extra: { documento: v.documento, tipoGasto: 'melhoria', ...(v.classeBenfeitoria ? { classeBenfeitoria: v.classeBenfeitoria } : {}) } })] });
         ui.aviso('Melhoria somada ao valor do bem.');
         depois();
       }

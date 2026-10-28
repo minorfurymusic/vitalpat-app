@@ -623,3 +623,10 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 .lista-conferencia li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 5px 0; border-bottom: 1px solid var(--borda); }
 .lista-conferencia .conf-nome { min-width: 0; }
 .lista-conferencia .conf-acoes { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* Impressos dos imóveis (Folha de Tombo, termos; 28/10/2026) */
+#area-impressao .doc-itens th { text-align: left; width: 32%; font-weight: 600; vertical-align: top; }
+#area-impressao .doc-itens td { vertical-align: top; }
+#area-impressao .doc-itens .doc-num { width: 28px; color: #555; }
+#area-impressao .campo-vazio { color: #888; }
+#area-impressao .doc-bem { color: #333; margin-top: -4px; }

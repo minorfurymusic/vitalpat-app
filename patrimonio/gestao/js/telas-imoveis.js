@@ -190,7 +190,7 @@
     if (aba === 'demonstrativo') return T['painel-imoveis']('demonstrativo', {});
     const a = E.alertas();
     const porSit = E.SITUACOES_REG.map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.situacaoRegistro === s).length, link: '#painel-imoveis/demonstrativo?gerar=1' }));
-    const porUso = ['Uso comum do povo', 'Uso especial', 'Dominical'].map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.uso === s).length }));
+    const porUso = VP.LISTAS.usosImovel.map((s) => ({ rotulo: s, valor: imo.filter((b) => b.imovel?.uso === s).length }));
     const lista = (titulo, itens, fmt) => (itens.length ? `<h4>${esc(titulo)} (${itens.length})</h4><ul class="lista-simples">${itens.slice(0, 8).map(fmt).join('')}${itens.length > 8 ? '<li>…</li>' : ''}</ul>` : '');
     return {
       titulo: 'Bens imóveis',

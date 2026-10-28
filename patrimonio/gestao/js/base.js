@@ -114,6 +114,11 @@ VP.LISTAS = {
   // Escala do livro de controle patrimonial + "Novo". 1 = Imprestável (vai para baixa).
   estados: { 8: 'Novo', 7: 'Ótimo', 6: 'Muito bom', 5: 'Bom', 4: 'Regular', 3: 'Ruim', 2: 'Péssimo', 1: 'Imprestável' },
   situacoesAquisicao: ['Compra', 'Doação recebida', 'Cessão recebida', 'Permuta', 'Construção / obra', 'Desapropriação', 'Dação em pagamento', 'Loteamento (área pública)', 'Saldo inicial'],
+  // Imóveis (livro "Gestão patrimonial", item 4.2 — etapa 1, 28/10/2026)
+  usosImovel: ['Uso comum do povo', 'Uso especial', 'Dominical', 'Em andamento (obra)', 'Demais bens imóveis'],
+  origensImovel: ['Compra', 'Construção', 'Doação', 'Permuta', 'Usucapião', 'Desapropriação', 'Dação em pagamento', 'Herança vacante', 'Área pública de loteamento', 'Outra'],
+  cercamentosImovel: ['Muro', 'Tela / alambrado', 'Cerca', 'Misto', 'Sem cercamento'],
+  usuariosImovel: ['Proprietário (a própria prefeitura)', 'Residente', 'Locatário', 'Cessionário', 'Comodatário', 'Arrendatário', 'Permissionário'],
   metodos: { linear: 'Cotas constantes (linear)', somaDigitos: 'Soma dos dígitos', unidades: 'Unidades produzidas' },
   tiposBaixa: ['Inservível', 'Alienação (leilão)', 'Doação', 'Furto / roubo', 'Extravio', 'Sinistro', 'Permuta', 'Fim da vida útil'],
   tiposTransferencia: { interna: 'Interna (entre unidades)', externa: 'Externa (empréstimo, cessão, conserto fora)', entidade: 'Entre entidades / fundos' },

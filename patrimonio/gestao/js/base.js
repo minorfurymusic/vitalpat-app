@@ -41,6 +41,7 @@ VP.u = {
   },
   inteiro: (v) => (v ?? 0).toLocaleString('pt-BR'),
   pct: (v) => ((v ?? 0) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%',
+  pct2: (v) => ((v ?? 0) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%',
   data: (iso) => {
     if (!iso) return '—';
     const [a, m, d] = String(iso).slice(0, 10).split('-');
@@ -119,7 +120,7 @@ VP.LISTAS = {
   origensImovel: ['Compra', 'Construção', 'Doação', 'Permuta', 'Usucapião', 'Desapropriação', 'Dação em pagamento', 'Herança vacante', 'Herança jacente (sob curador, ainda não incorporada)', 'Área pública de loteamento', 'Outra'], // jacente: livro pág. 329 (29/10/2026)
   cercamentosImovel: ['Muro', 'Tela / alambrado', 'Cerca', 'Misto', 'Sem cercamento'],
   usuariosImovel: ['Proprietário (a própria prefeitura)', 'Residente', 'Locatário', 'Cessionário', 'Comodatário', 'Arrendatário', 'Permissionário'],
-  metodos: { linear: 'Cotas constantes (linear)', somaDigitos: 'Soma dos dígitos', unidades: 'Unidades produzidas' },
+  metodos: { linear: 'Cotas constantes (linear)', somaDigitos: 'Soma dos dígitos', unidades: 'Unidades produzidas', exaustao: 'Exaustão (conforme a retirada: minas, jazidas, poços)' },
   tiposBaixa: ['Inservível', 'Alienação (leilão)', 'Doação', 'Furto / roubo', 'Extravio', 'Sinistro', 'Permuta', 'Fim da vida útil', 'Abandono', 'Inutilização'], // abandono e inutilização: livro págs. 182–183 (29/10/2026)
   // Só para imóveis (etapa 5, 28/10/2026). Formas de alienação da Lei 14.133/2021, art. 76, I [A conferir no texto oficial]
   tiposBaixaImovel: ['Demolição', 'Dação em pagamento', 'Investidura', 'Venda a outro órgão ou entidade pública'],
@@ -357,6 +358,9 @@ VP.corrigirAClassificar = async ({ gravar = true } = {}) => {
   if (gravar && lista.length) await VP.db.gravar('classificacoes', lista);
   return lista.length;
 };
+
+// Nome do desgaste: amortização (intangível), exaustão (recursos retirados) ou depreciação (29/10/2026)
+VP.desgaste = (b) => (b?.tipo === 'intangivel' ? 'Amortização' : b?.depreciacao?.metodo === 'exaustao' ? 'Exaustão' : 'Depreciação');
 
 VP.config = () => Object.assign({}, VP.CONFIG_PADRAO, (VP.db.pega('meta', 'config') || {}).valores || {});
 VP.salvarConfig = (valores) => VP.db.gravar('meta', { id: 'config', valores });

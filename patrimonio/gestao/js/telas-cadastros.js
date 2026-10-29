@@ -72,14 +72,34 @@
       { chave: 'contaDepTexto', rotulo: 'Conta de depreciação acumulada', largura: 'meia', sugestoes: VP.db.lista('contas').filter((c) => c.tipo === 'depreciacao').map(rotuloConta), placeholder: 'Digite para procurar', ajuda: (seVazio('contas', 'Nenhuma conta do tipo Depreciação acumulada. ', (c) => c.tipo === 'depreciacao') || '') + 'Onde soma o desgaste (ex.: 1.2.3.8.1.01 (-) Depreciação acumulada de bens móveis). Se não existir, é criada ao salvar.' },
       { chave: 'vidaUtilMeses', rotulo: 'Vida útil (meses)', tipo: 'numero', largura: 'meia', ajuda: 'Use a tabela oficial do município (decreto). Se a classe não tiver, vale a do grupo.' },
       { chave: 'residualPct', rotulo: 'Valor residual (%)', tipo: 'numero', largura: 'meia', ajuda: 'Quanto o bem ainda vale no fim da vida útil, em % do valor (de 0 a 99).' },
-      { chave: 'naoDeprecia', rotulo: 'Não deprecia (ex.: terrenos)', tipo: 'bool' }],
-    colunas: [{ chave: 'nome', titulo: 'Nome', valor: (x) => `${'— '.repeat(x.nivel === 'grupo' ? 0 : x.nivel === 'classe' ? 1 : 2)}${x.nome}` }, { chave: 'nivel', titulo: 'Nível' }, { chave: 'conta', titulo: 'Conta', valor: (x) => VP.nome('contas', VP.dadosDaClassificacao(x.id).contaId) }, { chave: 'vida', titulo: 'Vida útil', valor: (x) => { const d = VP.dadosDaClassificacao(x.id); return d.naoDeprecia ? 'Não deprecia' : d.vidaUtilMeses ? `${d.vidaUtilMeses} meses` : '—'; } }, { chave: 'res', titulo: 'Residual', valor: (x) => (VP.dadosDaClassificacao(x.id).residualPct ?? '—') + '%' }],
+      { chave: 'naoDeprecia', rotulo: 'Não deprecia (ex.: terrenos)', tipo: 'bool' },
+      // tabelas de vida útil do livro (29/10/2026): a lista só filtra ao digitar; "Consultar tabelas" mostra as duas lado a lado
+      { chave: 'linhaSiafiTexto', rotulo: 'Linha da tabela SIAFI (bem com valor residual)', sugestoes: VP.tabelasVida.opcoes('siafi'), placeholder: 'Digite para procurar', ajuda: 'Vida útil e residual do bem quando ele tem valor residual. Se vida útil e residual acima estiverem vazios, são preenchidos por esta linha. Vazio = vale o do grupo.' },
+      { chave: 'linhaReceitaTexto', rotulo: 'Linha da tabela da Receita (bem com residual zero)', sugestoes: VP.tabelasVida.opcoes('receita'), placeholder: 'Digite para procurar', ajuda: 'Usada quando o valor residual do bem é zero e o produto não tem NCM (com NCM da nota fiscal, a linha vem dele). Vazio = vale o do grupo.' }],
+    introForm: () => '<p class="ajuda">Vida útil e residual: use a tabela oficial do município (decreto). Para consultar as tabelas do livro (SIAFI e Receita) lado a lado: <button type="button" class="botao pequeno" data-consultar-tv>Consultar tabelas</button></p>',
+    ligarForm: (dlg) => {
+      const campo = (n) => dlg.querySelector(`[name="${n}"]`);
+      // linha SIAFI escolhida: preenche vida útil e residual só se estiverem vazios (a pessoa decide)
+      const preencher = (l) => { if (!l || l.tabela !== 'siafi') return; if (!campo('vidaUtilMeses').value) campo('vidaUtilMeses').value = l.anos * 12; if (!campo('residualPct').value) campo('residualPct').value = String(l.residual).replace('.', ','); };
+      campo('linhaSiafiTexto').addEventListener('change', () => preencher(VP.tabelasVida.linha('siafi', VP.tabelasVida.chaveDoTexto('siafi', campo('linhaSiafiTexto').value))));
+      dlg.querySelector('[data-consultar-tv]').addEventListener('click', () => VP.tabelasVida.consultar({ texto: campo('nome').value, aoUsar: (l) => { campo(l.tabela === 'siafi' ? 'linhaSiafiTexto' : 'linhaReceitaTexto').value = VP.tabelasVida.rotulo(l); preencher(l); } }));
+    },
+    colunas: [{ chave: 'nome', titulo: 'Nome', valor: (x) => `${'— '.repeat(x.nivel === 'grupo' ? 0 : x.nivel === 'classe' ? 1 : 2)}${x.nome}` }, { chave: 'nivel', titulo: 'Nível' }, { chave: 'conta', titulo: 'Conta', valor: (x) => VP.nome('contas', VP.dadosDaClassificacao(x.id).contaId) }, { chave: 'vida', titulo: 'Vida útil', valor: (x) => { const d = VP.dadosDaClassificacao(x.id); return d.naoDeprecia ? 'Não deprecia' : d.vidaUtilMeses ? `${d.vidaUtilMeses} meses` : '—'; } }, { chave: 'res', titulo: 'Residual', valor: (x) => (VP.dadosDaClassificacao(x.id).residualPct ?? '—') + '%' }, { chave: 'siafi', titulo: 'Linha SIAFI', valor: (x) => VP.dadosDaClassificacao(x.id).linhaSiafi || '' }, { chave: 'receita', titulo: 'Linha Receita', valor: (x) => VP.dadosDaClassificacao(x.id).linhaReceita || '' }],
     ordenar: (lista) => { const r = []; const desce = (pai) => lista.filter((c) => (c.paiId || '') === pai).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach((c) => { r.push(c); desce(c.id); }); desce(''); return r; },
     antesDeSalvar: (x) => { const pai = VP.db.pega('classificacoes', x.paiId); x.nivel = !pai ? 'grupo' : pai.paiId ? 'subclasse' : 'classe'; },
     // contas digitadas: acha ou cria (a conta nova só é gravada se a classificação for salva)
-    valoresDe: (x) => (x ? Object.assign({}, x, { contaTexto: x.contaId ? rotuloConta(VP.db.pega('contas', x.contaId) || { nome: '' }) : '', contaDepTexto: x.contaDepreciacaoId ? rotuloConta(VP.db.pega('contas', x.contaDepreciacaoId) || { nome: '' }) : '' }) : {}),
+    valoresDe: (x) => (x ? Object.assign({}, x, { contaTexto: x.contaId ? rotuloConta(VP.db.pega('contas', x.contaId) || { nome: '' }) : '', contaDepTexto: x.contaDepreciacaoId ? rotuloConta(VP.db.pega('contas', x.contaDepreciacaoId) || { nome: '' }) : '', linhaSiafiTexto: VP.tabelasVida.rotulo(VP.tabelasVida.linha('siafi', x.linhaSiafi)), linhaReceitaTexto: VP.tabelasVida.rotulo(VP.tabelasVida.linha('receita', x.linhaReceita)) }) : {}),
     preparar: (v) => {
       const novas = [];
+      for (const [txt, campo, tab, nome] of [['linhaSiafiTexto', 'linhaSiafi', 'siafi', 'SIAFI'], ['linhaReceitaTexto', 'linhaReceita', 'receita', 'da Receita']]) {
+        if (!(txt in v)) continue;
+        const ch = VP.tabelasVida.chaveDoTexto(tab, v[txt]);
+        if (ch === null) return { erro: `Linha da tabela ${nome} não encontrada: "${v[txt]}". Escolha da lista (digite para procurar) ou use "Consultar tabelas".` };
+        v[campo] = ch; delete v[txt];
+      }
+      // linha SIAFI sem vida útil ou residual digitados: vêm da linha
+      const ls = VP.tabelasVida.linha('siafi', v.linhaSiafi);
+      if (ls && !v.naoDeprecia) { if (v.vidaUtilMeses == null) v.vidaUtilMeses = ls.anos * 12; if (v.residualPct == null) v.residualPct = ls.residual; }
       for (const [txt, campo, tipo] of [['contaTexto', 'contaId', 'ativo'], ['contaDepTexto', 'contaDepreciacaoId', 'depreciacao']]) {
         if (!(txt in v)) continue;
         const r = VP.contaDoTexto(v[txt], tipo);
@@ -244,8 +264,8 @@
       ui.ligarTabela('cad-' + qual);
       if (origem === 'busca') { const b = area.querySelector('.busca'); b.focus(); if (foco != null) b.setSelectionRange(foco, foco); }
     };
-    const editar = (x) => ui.formulario({
-      titulo: (x ? 'Editar: ' : 'Novo: ') + c.titulo.split(' (')[0], campos: c.campos(), valores: c.valoresDe ? c.valoresDe(x) : x || {}, largura: 'media',
+    const editar = (x) => { const m = ui.formulario({
+      titulo: (x ? 'Editar: ' : 'Novo: ') + c.titulo.split(' (')[0], campos: c.campos(), valores: c.valoresDe ? c.valoresDe(x) : x || {}, largura: 'media', intro: c.introForm ? c.introForm() : '',
       salvar: async (v) => {
         const prep = c.preparar ? c.preparar(v) : { novas: [] };
         if (prep.erro) return prep.erro;
@@ -260,7 +280,7 @@
         ui.aviso(prep.novas.length ? `Salvo. Conta(s) nova(s) em Contas contábeis: ${prep.novas.map(rotuloConta).join('; ')}.` : 'Salvo.');
         VP.app.render();
       }
-    });
+    }); if (c.ligarForm) c.ligarForm(m.el); };
     return {
       titulo: 'Cadastros',
       acoes: `${VP.importaCadastros ? `${!VP.servidor?.ativo || VP.servidor.podeAlterar() ? '<label class="botao">Importar planilha unificada<input type="file" accept=".xlsx,.csv" data-importar-cad hidden></label> ' : ''}<button class="botao" data-baixar-todos-cad>Baixar planilha unificada</button> ` : ''}<button class="botao primario" data-novo-cad>+ Novo</button>`,

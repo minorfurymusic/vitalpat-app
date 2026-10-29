@@ -66,7 +66,8 @@
       { k: 'tipoBem', t: 'Tipo de bem', tipo: 'opcao', opcoes: () => Object.entries(VP.LISTAS.tiposBem) },
       { k: 'contaId', t: 'Conta contábil', tipo: 'ref', ref: 'contas' }, { k: 'contaDepreciacaoId', t: 'Conta de depreciação', tipo: 'ref', ref: 'contas' },
       { k: 'vidaUtilMeses', t: 'Vida útil (meses)', tipo: 'numero' }, { k: 'residualPct', t: 'Valor residual (%)', tipo: 'numero' },
-      { k: 'naoDeprecia', t: 'Não deprecia', tipo: 'bool' }],
+      { k: 'naoDeprecia', t: 'Não deprecia', tipo: 'bool' },
+      { k: 'linhaSiafi', t: 'Linha da tabela SIAFI', apelidos: ['linha siafi', 'tabela siafi'] }, { k: 'linhaReceita', t: 'Linha da tabela da Receita', apelidos: ['linha receita', 'ncm', 'tabela receita'] }],
       chaves: (x) => [norm(x._caminho || caminho(x))] },
     produtos: { aba: 'Produtos', titulo: 'Produto', campos: [
       { k: 'codigo', t: 'Código' }, { k: 'nome', t: 'Nome', obrig: true },
@@ -206,6 +207,12 @@
             if (!v.naoDeprecia && v.vidaUtilMeses != null && v.residualPct == null && herdado('residualPct') == null) it.erros.push('Informe o Valor residual (%): toda classificação que deprecia precisa dele');
             if (v.residualPct != null && (v.residualPct < 0 || v.residualPct >= 100)) it.erros.push('Valor residual (%) deve ser de 0 a 99');
             if (v.vidaUtilMeses != null && v.vidaUtilMeses <= 0) it.erros.push('Vida útil deve ser maior que zero');
+            // linhas das tabelas de vida útil do livro (29/10/2026): só o código (ex.: 14212.35.00, 8471)
+            for (const [k, tab, nome] of [['linhaSiafi', 'siafi', 'SIAFI'], ['linhaReceita', 'receita', 'da Receita']]) {
+              if (v[k] == null || v[k] === '') continue;
+              const ch = VP.tabelasVida.chaveDoTexto(tab, v[k]);
+              if (ch === null) it.erros.push(`Linha da tabela ${nome} não encontrada: ${v[k]}`); else v[k] = ch;
+            }
           }
           if (tabela === 'itensIncorporar') {
             if (!v.entidadeId) { const ents = VP.db.lista('entidades'); const novas = [...pend.entidades.values()]; const todas = ents.map((e) => e.id).concat([...new Set(novas)]); if (todas.length === 1) v.entidadeId = todas[0]; else it.erros.push(todas.length ? 'Entidade é obrigatória (há mais de uma cadastrada)' : 'Entidade é obrigatória (nenhuma cadastrada)'); }

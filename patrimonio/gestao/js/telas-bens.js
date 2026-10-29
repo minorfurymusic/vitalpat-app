@@ -227,6 +227,46 @@
     const proj = VP.projecao(b);
     const abast = evs.filter((e) => e.tipo === 'abastecimento');
     const litros = abast.reduce((t, e) => t + (e.dados.litros || 0), 0);
+    // Depreciação / amortização / exaustão (29/10/2026): tabela de vida útil usada, taxa em R$ e %, e a lista mês a mês
+    const cartaoDesgaste = () => {
+      const p = b.depreciacao || {};
+      const nome = VP.desgaste(b);
+      const exaust = p.metodo === 'exaustao';
+      const retirado = exaust ? evs.filter((e) => e.tipo === 'unidades').reduce((t, e) => t + (Number(e.dados.quantidade) || 0), 0) : 0;
+      const avisos = [];
+      if (exaust && !p.producaoTotal) avisos.push('Reserva total não informada: não há exaustão até informar (Editar).');
+      if (exaust && p.producaoTotal && !evs.some((e) => e.tipo === 'unidades' && e.data.slice(0, 7) === u.somaMeses(VP.Plataforma.hoje().slice(0, 7), -1))) avisos.push(`Sem retirada informada em ${u.mesExtenso(u.somaMeses(VP.Plataforma.hoje().slice(0, 7), -1))}: sem exaustão nesse mês.`);
+      if (p.tabela === 'receita' && !p.linhaTabela) avisos.push('Residual zero sem linha da tabela da Receita: escolha a linha na classificação.');
+      const linhas = VP.naoDeprecia(b)
+        ? [['Situação', b.tipo === 'intangivel' && p.automatica !== false && !s.vidaUtilMeses ? 'Sem prazo (vida útil indefinida): não amortiza' : p.automatica === false ? `Não ${nome === 'Amortização' ? 'amortiza' : 'deprecia'} automaticamente` : 'Classificação não deprecia (ex.: terreno)']]
+        : [[`${nome} automática`, p.automatica ? 'Sim' : 'Não'], ['Método', L.metodos[p.metodo] || ''], p.tabela ? ['Tabela de vida útil', VP.tabelasVida.descricao(b)] : null, ['Início', s.inicio ? u.mesExtenso(s.inicio) : ''],
+          exaust ? ['Reserva ou produção total', p.producaoTotal ? u.inteiro(p.producaoTotal) : 'não informada'] : ['Vida útil', s.vidaUtilMeses ? `${s.vidaUtilMeses} meses` : ''],
+          exaust ? ['Retirado até hoje', `${u.inteiro(retirado)}${p.producaoTotal ? ` (${u.pct(retirado / p.producaoTotal)} da reserva)` : ''}`] : null,
+          ['Residual', p.tabela === 'receita' && p.taxaAnual ? `${String(p.taxaAnual).replace('.', ',')}% pela tabela da Receita (${u.moeda(s.residual)}); digitado: zero` : p.residualTipo === 'percentual' ? `${p.residual}% (${u.moeda(s.residual)})` : u.moeda(s.residual)], ['Valor a depreciar', u.moeda(s.depreciavel)],
+          exaust ? null : ['Taxa mensal / anual', `${u.moeda(tx.mensal)} / ${u.moeda(tx.anual)} (${u.pct2(tx.percentualAnual / 12)} ao mês, ${u.pct2(tx.percentualAnual)} ao ano)`],
+          inicial ? ['Acumulado até a implantação do sistema', u.moeda(inicial)] : null, ['Acumulado manual', u.moeda(manual)], ['Acumulado automático (fechamentos)', u.moeda(automatica)],
+          ['Acumulado total', `${u.moeda(inicial + manual + automatica)}${s.base ? ` (${u.pct2(s.acumulada / s.base)} do valor)` : ''}`], ['Conta de débito', VP.nome('contas', p.contaDebito)], ['Conta de crédito', VP.nome('contas', p.contaCredito)]];
+      const extra = (avisos.length ? avisos.map((a) => `<p class="aviso-inline">${esc(a)}</p>`).join('') : '')
+        + (proj.length && !exaust ? `<h4>Valor ao longo da vida útil</h4>${G.linha(proj, { largura: 330, altura: 190, formato: u.moeda, formatoEixo: u.moedaCurta, rotuloX: u.mesNome, marcaX: VP.Plataforma.hoje().slice(0, 7), titulo: 'Valor do bem ao longo da vida útil' })}` : '')
+        + listaMensal();
+      return cartao(nome, 'depreciacao', linhas, extra);
+    };
+    // mês a mês: o que foi lançado no mês, % do valor do bem, acumulado em R$ e % e o valor que ficou
+    const listaMensal = () => {
+      const deps = evs.filter((e) => e.tipo === 'depreciacao');
+      if (!deps.length) return '';
+      const meses = [...new Set(deps.map((e) => e.data.slice(0, 7)))].sort();
+      const linhas = meses.map((m) => {
+        const doMes = deps.filter((e) => e.data.slice(0, 7) === m);
+        const valor = doMes.reduce((t, e) => t + (e.valor || 0), 0);
+        const sm = VP.saldo(b, u.fimDoMes(m));
+        const implantacao = doMes.every((e) => e.dados.saldoInicial);
+        return `<tr><td>${esc(implantacao ? `Até a implantação (${u.mesExtenso(m)})` : u.mesExtenso(m))}</td><td class="num">${u.moeda(valor)}</td><td class="num">${sm.base ? u.pct2(valor / sm.base) : '—'}</td><td class="num">${u.moeda(sm.acumulada)}</td><td class="num">${sm.base ? u.pct2(sm.acumulada / sm.base) : '—'}</td><td class="num">${u.moeda(sm.liquidoAntesDaBaixa)}</td></tr>`;
+      }).reverse();
+      return `<details class="lista-mensal" ${meses.length <= 24 ? 'open' : ''}><summary>${esc(VP.desgaste(b))} mês a mês (${meses.length} ${meses.length === 1 ? 'mês' : 'meses'})</summary>
+        <div class="tabela-rolagem"><table class="tabela" id="tab-mensal-${esc(b.id)}"><thead><tr><th>Mês</th><th class="num">No mês (R$)</th><th class="num">No mês (%)</th><th class="num">Acumulado (R$)</th><th class="num">Acumulado (%)</th><th class="num">Valor do bem depois</th></tr></thead><tbody>${linhas.join('')}</tbody></table></div>
+        <p class="ajuda">% sobre o valor do bem no mês (aquisição, reavaliação e melhorias). Acumulado desde a aquisição ou a última reavaliação.</p></details>`;
+    };
     const html = `
       <div class="ficha-topo cartao">
         <div class="ficha-foto">${foto}<label class="botao pequeno">Trocar foto<input type="file" accept="image/*" data-foto hidden></label></div>
@@ -263,7 +303,7 @@
         <button class="botao" data-acao="anexar">Anexar arquivo</button>
         <button class="botao" data-acao="melhoria">Melhoria</button>
         <button class="botao" data-acao="reavaliar">Reavaliar</button>
-        ${b.depreciacao?.metodo === 'unidades' ? '<button class="botao" data-acao="unidades">Unidades produzidas</button>' : ''}
+        ${b.depreciacao?.metodo === 'unidades' ? '<button class="botao" data-acao="unidades">Unidades produzidas</button>' : b.depreciacao?.metodo === 'exaustao' ? '<button class="botao" data-acao="unidades">Registrar retirada</button>' : ''}
         <button class="botao" data-acao="replicar">Replicar</button>
         <button class="botao" data-acao="recebimento">Recebimento</button>
         <button class="botao" data-acao="unir" title="O mesmo bem tem dois cadastros (duas plaquetas)">Unir cadastros</button>
@@ -288,7 +328,7 @@
         ${b.tipo === 'veiculo' ? cartao('Veículo', 'veiculo', [['Placa', b.veiculo?.placa], ['RENAVAM', b.veiculo?.renavam], ['Chassi', b.veiculo?.chassi], ['Combustível', b.veiculo?.combustivel], ['Ano/modelo', b.veiculo?.anoModelo], ['Tanque (litros)', b.veiculo?.capacidadeTanque], ['Abastecimentos registrados', abast.length ? `${abast.length} · ${u.inteiro(litros)} L · ${u.moeda(abast.reduce((t, e) => t + e.valor, 0))}` : '']]) : ''}
         ${cartao('Seguro e garantia', 'seguro', [['Seguradora', b.seguro?.seguradoraId ? VP.nome('seguradoras', b.seguro.seguradoraId) : ''], ['Corretora', b.seguro?.corretoraId ? VP.nome('seguradoras', b.seguro.corretoraId) : ''], ['Apólice', b.seguro?.apolice], ['Vigência', b.seguro?.inicio ? `${u.data(b.seguro.inicio)} a ${u.data(b.seguro.termino)}` : ''], ['Valor do seguro', b.seguro?.valor ? u.moeda(b.seguro.valor) : ''], ['Franquia', b.seguro?.franquia ? u.moeda(b.seguro.franquia) : ''], ['Garantia', b.garantia?.termino ? `${VP.nome('tiposGarantia', b.garantia.tipoId)} até ${u.data(b.garantia.termino)}` : ''], ['Fornecedor da garantia', b.garantia?.fornecedorId ? VP.nome('fornecedores', b.garantia.fornecedorId) : '']])}
         ${cartao('Valores e contas', 'valores', [['Conta contábil', VP.nome('contas', b.contaId)], ['Natureza de despesa', VP.ND.doBem(b) ? VP.ND.texto(VP.ND.doBem(b)) + (b.naturezaDespesa ? '' : ' (lida da ordem de compra)') : `não informada · sugestão: ${VP.ND.texto(VP.ND.sugerida(b))}`], ['Valor base (aquisição, reavaliação e melhorias)', u.moeda(s.base)], ['Melhorias somadas', u.moeda(s.agregado)], ['Valor residual', u.moeda(s.residual)], ['Depreciação acumulada', u.moeda(s.acumulada)], ['Valor contábil (líquido)', u.moeda(s.liquido)]], VP.ND.incoerencia(b) ? `<p class="aviso-inline"><b>Natureza de despesa:</b> ${esc(VP.ND.incoerencia(b))}</p>` : '')}
-        ${cartao('Depreciação', 'depreciacao', VP.naoDeprecia(b) ? [['Situação', b.depreciacao?.automatica === false ? 'Não deprecia automaticamente' : 'Classificação não deprecia (ex.: terreno)']] : [['Depreciar automaticamente', b.depreciacao?.automatica ? 'Sim' : 'Não'], ['Método', L.metodos[b.depreciacao?.metodo] || ''], ['Início', s.inicio ? u.mesExtenso(s.inicio) : ''], ['Vida útil', s.vidaUtilMeses ? `${s.vidaUtilMeses} meses` : ''], ['Residual', b.depreciacao?.residualTipo === 'percentual' ? `${b.depreciacao.residual}% (${u.moeda(s.residual)})` : u.moeda(s.residual)], ['Valor a depreciar', u.moeda(s.depreciavel)], ['Taxa mensal / anual', `${u.moeda(tx.mensal)} / ${u.moeda(tx.anual)} (${u.pct(tx.percentualAnual)} ao ano)`], inicial ? ['Acumulado até a implantação do sistema', u.moeda(inicial)] : null, ['Acumulado manual', u.moeda(manual)], ['Acumulado automático (fechamentos)', u.moeda(automatica)], ['Acumulado total', u.moeda(inicial + manual + automatica)], ['Conta de débito', VP.nome('contas', b.depreciacao?.contaDebito)], ['Conta de crédito', VP.nome('contas', b.depreciacao?.contaCredito)]], proj.length ? `<h4>Valor ao longo da vida útil</h4>${G.linha(proj, { largura: 330, altura: 190, formato: u.moeda, formatoEixo: u.moedaCurta, rotuloX: u.mesNome, marcaX: VP.Plataforma.hoje().slice(0, 7), titulo: 'Valor do bem ao longo da vida útil' })}` : '')}
+        ${cartaoDesgaste()}
         <section class="cartao secao"><header><h3>Despesas e manutenções</h3></header>
           ${custos.length ? `<div class="resumo-linha">${G.numero('Últimos 12 meses', u.moeda(custos.filter((e) => e.data >= umAno).reduce((t, e) => t + (e.valor || 0), 0)))}${G.numero('Total registrado', u.moeda(custos.reduce((t, e) => t + (e.valor || 0), 0)))}</div>` : '<p class="vazio">Nenhuma despesa registrada.</p>'}
         </section>
@@ -492,7 +532,7 @@
       { chave: 'depreciacao.metodo', rotulo: 'Método', tipo: 'select', opcoes: Object.entries(L.metodos), vazio: false },
       { chave: 'depreciacao.inicio', rotulo: 'Início da depreciação', tipo: 'data', largura: 'meia' }, { chave: 'depreciacao.vidaUtilMeses', rotulo: 'Vida útil (meses)', tipo: 'numero', largura: 'meia' },
       { chave: 'depreciacao.residualTipo', rotulo: 'Residual em', tipo: 'select', opcoes: [['percentual', 'Percentual (%)'], ['valor', 'Valor (R$)']], vazio: false, largura: 'meia' }, { chave: 'depreciacao.residual', rotulo: 'Residual', tipo: 'numero', largura: 'meia' },
-      { chave: 'depreciacao.producaoTotal', rotulo: 'Produção total estimada (método por unidades)', tipo: 'numero' },
+      { chave: 'depreciacao.producaoTotal', rotulo: 'Produção ou reserva total estimada (unidades produzidas ou exaustão)', tipo: 'numero', ajuda: 'Exaustão (minas, jazidas, poços): a reserva total, na mesma medida das retiradas. Sem ela, não há exaustão (o sistema só avisa).' },
       { chave: 'depreciacao.contaDebito', rotulo: 'Conta de débito', tipo: 'select', opcoes: opc('contas'), largura: 'meia' }, { chave: 'depreciacao.contaCredito', rotulo: 'Conta de crédito', tipo: 'select', opcoes: opc('contas'), largura: 'meia' },
       { chave: '_justificativa', rotulo: 'Justificativa da mudança', tipo: 'area', obrigatorio: true }] }
   });
@@ -518,6 +558,9 @@
       intro: sec.aviso ? `<p class="aviso-inline">${esc(sec.aviso)}</p>` : '',
       salvar: async (v, dlg) => {
         const mudou = [];
+        // residual sempre pedido (pode ser zero); de/para zero troca a tabela de vida útil (29/10/2026)
+        if (chave === 'depreciacao' && v.depreciacao?.automatica && v.depreciacao.residual == null && !(b.tipo === 'intangivel' && !v.depreciacao.vidaUtilMeses)) return 'Informe o residual (pode ser zero).';
+        const antesDep = JSON.parse(JSON.stringify(b.depreciacao || {}));
         for (const c of sec.campos) {
           if (c.chave.startsWith('_')) continue;
           let novo = pegaCaminho(v, c.chave);
@@ -532,6 +575,20 @@
           if (JSON.stringify(medidas) !== JSON.stringify(b.medidas || [])) { mudou.push({ campo: 'Medidas', antes: (b.medidas || []).length + ' itens', depois: medidas.length + ' itens' }); b.medidas = medidas; }
         }
         if (chave === 'local' && VP.config().obrigaUnidade && !b.unidadeId) return 'A configuração exige unidade para todo bem.';
+        if (chave === 'depreciacao' && VP.tabelasVida) {
+          const p = b.depreciacao || {};
+          const zeroAntes = !(Number(antesDep.residual) > 0), zeroDepois = !(Number(p.residual) > 0);
+          const vidaDigitada = mudou.some((m) => m.campo === 'Vida útil (meses)');
+          // muda de tabela quando o residual passa de/para zero ou o método muda; vida útil digitada agora vale sobre a tabela
+          if (zeroAntes !== zeroDepois || (antesDep.metodo || 'linear') !== (p.metodo || 'linear')) {
+            const vidaPessoa = p.vidaUtilMeses;
+            VP.tabelasVida.aplicar(b);
+            if (vidaDigitada) p.vidaUtilMeses = vidaPessoa;
+            const nomeT = (t) => (t ? VP.tabelasVida.NOME_CURTO[t] : 'nenhuma');
+            if ((antesDep.tabela || '') !== (p.tabela || '') || (antesDep.linhaTabela || '') !== (p.linhaTabela || '')) mudou.push({ campo: 'Tabela de vida útil', antes: `${nomeT(antesDep.tabela)}${antesDep.linhaTabela ? ' ' + antesDep.linhaTabela : ''}`, depois: `${nomeT(p.tabela)}${p.linhaTabela ? ' ' + p.linhaTabela : ''}` });
+            if (!vidaDigitada && (antesDep.vidaUtilMeses || 0) !== (p.vidaUtilMeses || 0)) mudou.push({ campo: 'Vida útil (meses), pela tabela', antes: antesDep.vidaUtilMeses ?? '', depois: p.vidaUtilMeses ?? '' });
+          }
+        }
         if (!mudou.length) return null;
         const ev = VP.novoEvento(b.id, 'alteracao', { descricao: `Alterado: ${mudou.map((m) => m.campo).join(', ')}`, extra: { mudancas: mudou, justificativa: v._justificativa || '' } });
         await VP.db.gravarVarias({ bens: [b], eventos: [ev] });
@@ -618,7 +675,9 @@
       { chave: 'valor', rotulo: 'Valor de aquisição (R$)', tipo: 'moeda', obrigatorio: true, largura: 'meia' },
       // Valor residual sempre informado, em % ou R$ (decisão do usuário, 14/10/2026): vem da classificação e pode ser ajustado
       { chave: 'residualTipo', rotulo: 'Valor residual em', tipo: 'select', opcoes: [['percentual', 'Percentual (%)'], ['valor', 'Dinheiro (R$)']], vazio: false, padrao: 'percentual', largura: 'meia' },
-      { chave: 'residual', rotulo: 'Valor residual', tipo: 'moeda', largura: 'meia', ajuda: 'Vem da classificação. O valor do bem nunca fica abaixo dele.' },
+      { chave: 'residual', rotulo: 'Valor residual', tipo: 'moeda', largura: 'meia', ajuda: 'Vem da classificação. O valor do bem nunca fica abaixo dele. Zero = usa a tabela da Receita, e o residual passa a ser a taxa anual da linha.' },
+      // intangível (29/10/2026): só amortiza se tem prazo
+      ...(tipo === 'intangivel' ? [{ chave: 'prazoMeses', rotulo: 'Prazo de uso (meses)', tipo: 'numero', largura: 'meia', ajuda: 'Licença ou direito com prazo: amortiza nesse prazo. Vazio = sem prazo (vida útil indefinida): não amortiza.' }] : []),
       { chave: 'quantidade', rotulo: 'Quantidade (gera um bem para cada)', tipo: 'numero', padrao: 1, largura: 'meia' },
       { chave: 'situacaoAquisicao', rotulo: 'Como entrou', tipo: 'select', opcoes: L.situacoesAquisicao.map((x) => [x, x]), padrao: 'Compra', vazio: false, largura: 'meia' },
       { chave: 'fornecedorId', rotulo: 'Fornecedor', tipo: 'select', opcoes: opc('fornecedores'), largura: 'meia', ajuda: VP.db.lista('fornecedores').length ? '' : 'Nenhum fornecedor ainda. Ele é cadastrado sozinho pela compra (Entradas) ou pela nota fiscal.' },
@@ -635,7 +694,7 @@
     const classes = classificacoesDoTipo(tipo).map(caminhoClassificacao).sort((a, b) => a.localeCompare(b, 'pt-BR'));
     return {
       titulo: 'Novo ' + nomeTipo,
-      acoes: `${['imovel', 'infraestrutura'].includes(tipo) && VP.matricula ? '<button class="botao" data-nova-matricula>Cadastrar pela matrícula (PDF)</button> ' : ''}<label class="botao">Importar nota fiscal (XML)<input type="file" accept=".xml,text/xml" data-nfe hidden></label> <label class="botao">Importar PDF (nota ou ordem de compra)<input type="file" accept=".pdf,application/pdf" data-nf-pdf hidden></label> <a class="botao" href="#${tipo === 'veiculo' ? 'frota/veiculos' : 'bens/' + GRUPO_DO_TIPO[tipo]}">Cancelar</a>`,
+      acoes: `<button type="button" class="botao" data-consultar-tv>Tabelas de vida útil</button> ${['imovel', 'infraestrutura'].includes(tipo) && VP.matricula ? '<button class="botao" data-nova-matricula>Cadastrar pela matrícula (PDF)</button> ' : ''}<label class="botao">Importar nota fiscal (XML)<input type="file" accept=".xml,text/xml" data-nfe hidden></label> <label class="botao">Importar PDF (nota ou ordem de compra)<input type="file" accept=".pdf,application/pdf" data-nf-pdf hidden></label> <a class="botao" href="#${tipo === 'veiculo' ? 'frota/veiculos' : 'bens/' + GRUPO_DO_TIPO[tipo]}">Cancelar</a>`,
       html: `<form class="cartao form-novo" id="form-novo" autocomplete="off">
           <p class="ajuda">Digite o nome do bem. Se já existir um igual (no catálogo ou em outro bem), o sistema oferece puxar as informações. Vida útil, valor residual e contas vêm da classificação; código e plaqueta são automáticos.</p>
           <div id="nf-pdf-info" class="achado" aria-live="polite"></div>
@@ -652,6 +711,7 @@
       ligar() {
         const f = document.getElementById('form-novo');
         document.querySelector('[data-nova-matricula]')?.addEventListener('click', () => VP.matricula.cadastrarNovo());
+        document.querySelector('[data-consultar-tv]')?.addEventListener('click', () => VP.tabelasVida.consultar({ texto: f.elements.descricao.value }));
         const el = (n) => f.elements[n];
         const mostrarClasse = () => {
           const c = acharClassificacao(el('classificacaoTexto').value, tipo);
@@ -689,6 +749,14 @@
           const qtd = Math.max(1, Math.floor(v.quantidade || 1));
           const campoRes = el('residual');
           if (campoRes && !campoRes.dataset.mexido) { campoRes.value = dc && !dc.naoDeprecia && dc.residualPct != null ? String(dc.residualPct).replace('.', ',') : ''; el('residualTipo').value = 'percentual'; }
+          if (el('prazoMeses') && !el('prazoMeses').dataset.mexido) el('prazoMeses').value = dc && !dc.naoDeprecia && dc.vidaUtilMeses ? dc.vidaUtilMeses : '';
+          // qual tabela de vida útil vai valer (residual zero → Receita)
+          const resPrevisto = u.num(el('residual').value);
+          const prodNcm = VP.db.lista('produtos').find((p) => u.normalizar(p.nome) === u.normalizar(el('descricao').value))?.ncm;
+          const tvr = dc && !dc.naoDeprecia && tipo !== 'intangivel' && resPrevisto != null ? VP.tabelasVida.regra({ tipo, residual: resPrevisto, dc, ncm: prodNcm }) : null;
+          const lTv = tvr && VP.tabelasVida.linha(tvr.tabela, tvr.linha);
+          const vidaPrev = tipo === 'intangivel' ? (u.num(el('prazoMeses')?.value) || 0) : tvr?.vidaUtilMeses || dc?.vidaUtilMeses;
+          const textoTv = !tvr ? '' : tvr.tabela === 'receita' ? ` · residual zero: tabela da Receita ${lTv ? `${lTv.chave} (${lTv.anos} anos; residual = taxa de ${String(lTv.taxa).replace('.', ',')}%)` : 'sem linha (vale a vida útil da classificação)'}` : ` · tabela SIAFI ${lTv ? lTv.chave : 'sem linha na classificação'}`;
           const lim = VP.config().limiteControle;
           // Classificador: item barato E de pouca durabilidade pode ser item de controle. Só sugere; a pessoa decide.
           const an = VP.controle && VP.classificador && tipo === 'movel' && v.valor > 0 && v.valor <= lim ? VP.classificador.analisar({ descricao: el('descricao').value, valor: v.valor, classificacaoId: texto ? acharClassificacao(texto, tipo)?.id : '', tipo }) : null;
@@ -696,12 +764,13 @@
           const dica = !an ? '' : an.sugestao === 'controle'
             ? `<p class="aviso-inline" id="dica-controle">Sugestão: <b>item de controle</b> (sem plaqueta, fora do balancete) — ${esc(an.motivo)}${an.fonteVida ? ` (${esc(an.fonteVida)})` : ''}. Você decide. <button type="button" class="botao pequeno" data-ir-controle>Cadastrar como item de controle</button></p>`
             : !an.certeza ? `<p class="ajuda" id="dica-controle">Valor até ${u.moeda(lim)}, mas o sistema não sabe quanto este item dura. Se durar até ${VP.config().limiteControleMeses} meses, pode ser <b>item de controle</b>. <button type="button" class="botao pequeno" data-ir-controle>Cadastrar como item de controle</button></p>` : '';
-          document.getElementById('previa-novo').innerHTML = dica + (dc ? `<b>Prévia:</b> ${qtd} bem(ns) a partir do código ${cfg.codigoManual ? (v.codigo || '?') : VP.proximoCodigo()} · conta ${esc(VP.nome('contas', dc.contaId))} · ${dc.naoDeprecia ? 'não deprecia' : `vida útil ${dc.vidaUtilMeses || '?'} meses, residual ${dc.residualPct ?? 0}%`}${v.valor ? ` · total ${u.moeda(v.valor * qtd)}` : ''}` : '');
+          document.getElementById('previa-novo').innerHTML = dica + (dc ? `<b>Prévia:</b> ${qtd} bem(ns) a partir do código ${cfg.codigoManual ? (v.codigo || '?') : VP.proximoCodigo()} · conta ${esc(VP.nome('contas', dc.contaId))} · ${dc.naoDeprecia ? 'não deprecia' : (tipo === 'intangivel' && !vidaPrev ? 'sem prazo: não amortiza' : `vida útil ${vidaPrev || '?'} meses, residual ${resPrevisto ?? dc.residualPct ?? 0}${el('residualTipo').value === 'valor' ? ' (R$)' : '%'}${textoTv}`)}${v.valor ? ` · total ${u.moeda(v.valor * qtd)}` : ''}` : '');
           document.querySelector('[data-ir-controle]')?.addEventListener('click', () => VP.controle.novo(async (x) => { await VP.classificador.registrarDecisoes([{ descricao: x.descricao, escolha: 'controle', valor: x.valorUnitario, sugerido: ultimaAnalise?.sugestao }]); VP.app.ir('#controle'); }, { descricao: el('descricao').value, quantidade: v.quantidade || 1, valorUnitario: v.valor, unidadeId: v.unidadeId, responsavelId: v.responsavelId, fornecedorId: v.fornecedorId, estado: v.estado }));
         };
         el('descricao').addEventListener('input', mostrarNome);
         el('classificacaoTexto').addEventListener('input', () => { mostrarClasse(); previa(); });
         ['residual', 'residualTipo'].forEach((k) => el(k).addEventListener('input', () => { el('residual').dataset.mexido = '1'; }));
+        el('prazoMeses')?.addEventListener('input', () => { el('prazoMeses').dataset.mexido = '1'; });
         f.addEventListener('change', (e) => {
           if (e.target.name === 'unidadeId') { const un = VP.db.pega('unidades', e.target.value); if (un?.responsavelId) el('responsavelId').value = un.responsavelId; if (un?.entidadeId) el('entidadeId').value = un.entidadeId; }
           previa();
@@ -765,7 +834,8 @@
           if (faltando.length) { erro.textContent = 'Preencha: ' + faltando.join(', '); return; }
           if (cfg.codigoManual && VP.db.lista('bens', true).some((x) => x.codigo === v.codigo)) { erro.textContent = 'Já existe bem com este código.'; return; }
           const dcRes = dadosPrevistos(textoCl, document.querySelector('#achado-classe [data-mae]')?.value || '', tipo);
-          if (!dcRes.naoDeprecia) {
+          if (tipo === 'intangivel' && !v.prazoMeses) { v.prazoMeses = 0; if (v.residual == null) v.residual = 0; }
+          if (!dcRes.naoDeprecia && !(tipo === 'intangivel' && !v.prazoMeses)) {
             if (v.residual == null) { erro.textContent = 'Informe o Valor residual (em % ou R$). O valor do bem nunca fica abaixo dele.'; return; }
             if (v.residual < 0 || (v.residualTipo === 'percentual' && v.residual >= 100) || (v.residualTipo === 'valor' && v.residual >= v.valor)) { erro.textContent = v.residualTipo === 'valor' ? 'O valor residual (R$) deve ser menor que o valor de aquisição.' : 'O valor residual (%) deve ser de 0 a 99.'; return; }
           }
@@ -962,8 +1032,10 @@
         origem: Object.assign({ quantidade: v.quantidade || 1, valorUnitario: v.valor }, v.origem || {}), nf: v.nf || {},
         detalhes: Object.assign({ tombamento: cfg.tombamentoAutomatico ? String(codigo) : '', dataTombamento: cfg.tombamentoAutomatico ? VP.Plataforma.hoje() : '', textoJuridico: {} }, v.detalhes || {}, i > 0 ? { serie: '' } : {}),
         endereco: null, medidas: [], veiculo: v.tipo === 'veiculo' || dc.tipoBem === 'veiculo' || grupo?.tipoBem === 'veiculo' ? {} : null, seguro: null, garantia: null, fotos: [], anexos: [], criticidade: 2,
-        depreciacao: { automatica: !dc.naoDeprecia, metodo: 'linear', inicio: u.somaMeses(v.dataIncorporacao || VP.Plataforma.hoje(), 1) + '-01', vidaUtilMeses: dc.vidaUtilMeses || 0, residualTipo: v.residualTipo || 'percentual', residual: v.residual ?? dc.residualPct ?? 0, producaoTotal: 0, contaDebito: 'C_VPD', contaCredito: dc.contaDepreciacaoId || '' }
+        depreciacao: { automatica: !dc.naoDeprecia, metodo: 'linear', inicio: u.somaMeses(v.dataIncorporacao || VP.Plataforma.hoje(), 1) + '-01', vidaUtilMeses: (v.tipo === 'intangivel' && v.prazoMeses !== undefined ? v.prazoMeses : dc.vidaUtilMeses) || 0, residualTipo: v.residualTipo || 'percentual', residual: v.residual ?? dc.residualPct ?? 0, producaoTotal: 0, contaDebito: 'C_VPD', contaCredito: dc.contaDepreciacaoId || '' }
       };
+      // tabela de vida útil do livro (29/10/2026): com residual, SIAFI; residual zero, Receita (pelo NCM do produto ou pela classificação)
+      if (VP.tabelasVida) VP.tabelasVida.aplicar(b);
       bens.push(b);
       eventos.push(VP.novoEvento(b.id, 'incorporacao', { data: b.dataIncorporacao, valor: v.valor, descricao: `Incorporação — ${b.situacaoAquisicao}${v.origemTexto ? ' · ' + v.origemTexto : ''}`, extra: { contaDebito: b.contaId } }));
       codigo++;
@@ -1207,11 +1279,12 @@
       depois();
     }
   });
-  A.unidadesProduzidas = (b, depois) => ui.formulario({
-    titulo: 'Unidades produzidas no mês', largura: 'pequena',
-    campos: [{ chave: 'mes', rotulo: 'Mês', tipo: 'data', padrao: VP.Plataforma.hoje(), obrigatorio: true }, { chave: 'quantidade', rotulo: 'Unidades (horas, km, peças…)', tipo: 'numero', obrigatorio: true }],
-    salvar: async (v) => { await VP.db.gravar('eventos', VP.novoEvento(b.id, 'unidades', { data: v.mes, descricao: `${v.quantidade} unidades`, extra: { quantidade: v.quantidade } })); ui.aviso('Registrado. Entra no próximo fechamento do mês.'); depois(); }
-  });
+  A.unidadesProduzidas = (b, depois) => { const ex = b.depreciacao?.metodo === 'exaustao'; return ui.formulario({
+    titulo: ex ? 'Retirada no mês (exaustão)' : 'Unidades produzidas no mês', largura: 'pequena',
+    intro: ex ? `<p class="ajuda">Quanto foi retirado no mês (toneladas, m³, barris…), na mesma medida da reserva total${b.depreciacao?.producaoTotal ? ` (${u.inteiro(b.depreciacao.producaoTotal)})` : ''}. Exaustão do mês = valor a exaurir × retirada ÷ reserva total.</p>` : '',
+    campos: [{ chave: 'mes', rotulo: 'Mês', tipo: 'data', padrao: VP.Plataforma.hoje(), obrigatorio: true }, { chave: 'quantidade', rotulo: ex ? 'Quantidade retirada' : 'Unidades (horas, km, peças…)', tipo: 'numero', obrigatorio: true }],
+    salvar: async (v) => { if (v.quantidade < 0) return 'A quantidade não pode ser negativa.'; await VP.db.gravar('eventos', VP.novoEvento(b.id, 'unidades', { data: v.mes, descricao: ex ? `Retirada: ${v.quantidade}` : `${v.quantidade} unidades`, extra: { quantidade: v.quantidade } })); ui.aviso('Registrado. Entra no próximo fechamento do mês.'); depois(); }
+  }); };
   A.melhoria = (b, depois) => {
     const s = VP.saldo(b);
     const ehImovel = !!(VP.imoveis && VP.imoveis.ehImovel(b));

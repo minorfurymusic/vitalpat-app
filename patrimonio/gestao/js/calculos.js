@@ -57,6 +57,8 @@
     const vida = (marco && marco.tipo === 'reavaliacao' && marco.dados.vidaUtilMeses) || p.vidaUtilMeses || 0;
     let residual = 0;
     if (marco && marco.tipo === 'reavaliacao' && marco.dados.residual != null) residual = marco.dados.residual;
+    // residual zero digitado + tabela da Receita (IR): o residual passa a ser a taxa anual da tabela (decisão do usuário, 29/10/2026)
+    else if (p.tabela === 'receita' && p.taxaAnual) residual = base * p.taxaAnual / 100;
     else residual = p.residualTipo === 'percentual' ? base * (p.residual || 0) / 100 : (p.residual || 0);
     residual = Math.min(residual, base);
     let inicio = null;
@@ -124,6 +126,8 @@
   VP.naoDeprecia = (bem) => {
     const p = bem.depreciacao || {};
     if (!p.automatica) return true;
+    // intangível só amortiza se tem prazo (vida útil definida); sem prazo = vida útil indefinida, não amortiza (29/10/2026)
+    if (bem.tipo === 'intangivel' && !VP.saldo(bem).vidaUtilMeses) return true;
     const cl = VP.db.pega('classificacoes', bem.classificacaoId);
     return !!(cl && cl.naoDeprecia);
   };
@@ -133,7 +137,7 @@
     if (VP.naoDeprecia(bem)) return 0;
     const s = VP.saldo(bem, u.fimDoMes(u.somaMeses(ym, -1)));
     if (s.baixado || (bem.status === 'baixado' && !VP.eventosDoBem(bem.id).some((e) => e.tipo === 'baixa'))) return 0;
-    if (!s.inicio || ym < s.inicio || !s.vidaUtilMeses) return 0;
+    if (!s.inicio || ym < s.inicio || (!s.vidaUtilMeses && (bem.depreciacao || {}).metodo !== 'exaustao')) return 0;
     const restante = r2(s.depreciavel - s.acumulada);
     if (restante <= 0) return 0;
     const p = bem.depreciacao || {};
@@ -143,7 +147,9 @@
       const k = u.mesesEntre(s.inicio, ym) + 1;
       if (k > n) return 0;
       q = s.depreciavel * (n - k + 1) / (n * (n + 1) / 2);
-    } else if (p.metodo === 'unidades') {
+    } else if (p.metodo === 'unidades' || p.metodo === 'exaustao') {
+      // exaustão (minas, jazidas, poços): conforme a quantidade retirada no mês ÷ reserva total. Sem reserva ou sem
+      // retirada informada, não há exaustão no mês: o sistema não para, só avisa (pendências e ficha do bem)
       const total = p.producaoTotal || 0;
       if (!total) return 0;
       const qtd = VP.eventosDoBem(bem.id).filter((e) => e.tipo === 'unidades' && e.data.slice(0, 7) === ym)
@@ -158,6 +164,7 @@
   // Taxas para mostrar na ficha (referência: método linear)
   VP.taxas = (bem) => {
     const s = VP.saldo(bem);
+    const p = bem.depreciacao || {};
     const mensal = s.vidaUtilMeses ? r2(s.depreciavel / s.vidaUtilMeses) : 0;
     return { mensal, anual: r2(mensal * 12), percentualAnual: s.base ? mensal * 12 / s.base : 0 };
   };
@@ -174,7 +181,7 @@
       pts.push({ x: ym, y: r2(s.base - acum) });
       let q;
       if (p.metodo === 'somaDigitos') q = s.depreciavel * (s.vidaUtilMeses - k) / (s.vidaUtilMeses * (s.vidaUtilMeses + 1) / 2);
-      else q = s.depreciavel / s.vidaUtilMeses; // unidades: aproximação linear para a projeção
+      else q = s.depreciavel / s.vidaUtilMeses; // unidades e exaustão: aproximação linear para a projeção
       acum = Math.min(s.depreciavel, acum + Math.max(0, q));
     }
     return pts;
@@ -298,6 +305,16 @@
     const limiteReav = `${Number(hoje.slice(0, 4)) - cfg.reavaliacaoAnos}${hoje.slice(4)}`;
     add('reavaliacao', 'atencao', `Bens sem reavaliação há mais de ${cfg.reavaliacaoAnos} anos`, bens.filter((b) => { const s = VP.saldo(b); return b.tipo !== 'intangivel' && s.marco && s.marco.data < limiteReav; }).length, '#financeiro/reavaliacao');
     add('depreciados', 'info', 'Bens totalmente depreciados ainda em uso (avaliar reavaliação)', bens.filter((b) => { const s = VP.saldo(b); return s.vidaUtilMeses && s.consumido >= 1; }).length, '#bens?depreciados=1');
+    // tabelas de vida útil do livro (29/10/2026): avisos, nunca bloqueiam
+    const linear = bens.filter((b) => !VP.naoDeprecia(b) && b.tipo !== 'intangivel' && (b.depreciacao?.metodo || 'linear') === 'linear');
+    const clSemLinha = new Set(linear.filter((b) => !VP.dadosDaClassificacao(b.classificacaoId).linhaSiafi).map((b) => b.classificacaoId));
+    add('classif-sem-linha', 'info', 'Classificações sem linha da tabela de vida útil (SIAFI)', clSemLinha.size, '#cadastros/classificacoes', 'Em Cadastros → Classificações, edite a classificação e escolha a linha (botão "Consultar tabelas"). Enquanto isso, vale a vida útil digitada nela.');
+    add('receita-sem-linha', 'atencao', 'Bens com residual zero sem linha da tabela da Receita', linear.filter((b) => b.depreciacao?.tabela === 'receita' && !b.depreciacao.linhaTabela).length, '#cadastros/classificacoes', 'O produto não tem NCM e a classificação não tem linha da Receita: o bem usa a vida útil da classificação. Escolha a linha da Receita na classificação.');
+    const exaust = bens.filter((b) => b.depreciacao?.metodo === 'exaustao' && b.depreciacao?.automatica !== false);
+    add('exaustao-sem-reserva', 'atencao', 'Bens com exaustão sem a reserva total informada (não há exaustão até informar)', exaust.filter((b) => !b.depreciacao.producaoTotal).length, '#bens', 'Na ficha do bem, Depreciação → Editar: informe a reserva ou produção total estimada.');
+    const mesPassado = u.somaMeses(hoje.slice(0, 7), -1);
+    add('exaustao-sem-retirada', 'atencao', `Bens com exaustão sem retirada informada em ${u.mesExtenso(mesPassado)} (sem exaustão no mês)`, exaust.filter((b) => b.depreciacao.producaoTotal && (b.dataIncorporacao || '9999').slice(0, 7) <= mesPassado && !VP.eventosDoBem(b.id).some((e) => e.tipo === 'unidades' && e.data.slice(0, 7) === mesPassado)).length, '#bens', 'Na ficha do bem, use "Registrar retirada". Se não houve retirada no mês, não há exaustão.');
+    add('intangivel-sem-prazo', 'info', 'Bens intangíveis sem prazo (vida útil indefinida: não amortizam)', bens.filter((b) => b.tipo === 'intangivel' && b.depreciacao?.automatica !== false && !VP.saldo(b).vidaUtilMeses).length, '#bens/moveis', 'Se a licença ou o direito tiver prazo, informe a vida útil na ficha (Depreciação → Editar).');
 
     const itens = VP.db.lista('itensIncorporar').filter((i) => i.ativo && (i.quantidade - (i.incorporados || 0)) > 0 && (!cfg.incorporaSoLiquidados || i.liquidado));
     add('incorporar', 'atencao', 'Itens comprados aguardando incorporação', itens.length, '#entradas');
@@ -365,7 +382,7 @@
     let c = VP.db.pega('classificacoes', clId);
     const r = {};
     while (c) {
-      for (const k of ['contaId', 'contaDepreciacaoId', 'vidaUtilMeses', 'residualPct', 'tipoBem']) if (r[k] == null && c[k] != null && c[k] !== '') r[k] = c[k];
+      for (const k of ['contaId', 'contaDepreciacaoId', 'vidaUtilMeses', 'residualPct', 'tipoBem', 'linhaSiafi', 'linhaReceita']) if (r[k] == null && c[k] != null && c[k] !== '') r[k] = c[k];
       if (r.naoDeprecia == null && c.naoDeprecia != null) r.naoDeprecia = c.naoDeprecia;
       c = c.paiId ? VP.db.pega('classificacoes', c.paiId) : null;
     }
@@ -395,7 +412,7 @@
     const loteId = 'fech-' + ym + '-' + u.id();
     const data = u.fimDoMes(ym);
     const eventos = lista.map((x) => VP.novoEvento(x.bem.id, 'depreciacao', {
-      data, valor: x.valor, loteId, descricao: `Depreciação de ${u.mesExtenso(ym)}`,
+      data, valor: x.valor, loteId, descricao: `${VP.desgaste(x.bem)} de ${u.mesExtenso(ym)}`,
       extra: { contaDebito: x.bem.depreciacao?.contaDebito || '', contaCredito: x.bem.depreciacao?.contaCredito || '' }
     }));
     const total = r2(lista.reduce((t, x) => t + x.valor, 0));

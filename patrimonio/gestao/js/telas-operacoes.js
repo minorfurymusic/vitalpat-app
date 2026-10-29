@@ -687,11 +687,13 @@
         { chave: 'motivo', titulo: 'Motivo', valor: (e) => e.dados.motivo },
         { chave: 'doc', titulo: 'Documento', valor: (e) => e.dados.documento },
         { chave: 'valor', titulo: 'Valor que saiu', num: true, soma: true, formato: u.moeda, valor: (e) => e.valor },
-        { chave: 'termo', titulo: '', html: (e) => `<button class="botao pequeno" data-termo-baixa="${esc(e.id)}">Termo</button>` }] }),
+        { chave: 'termo', titulo: '', html: (e) => `<button class="botao pequeno" data-termo-baixa="${esc(e.id)}">Termo</button>${e.dados.tipoBaixa === 'Abandono' ? ` <button class="botao pequeno" data-abandono="${esc(e.id)}">Justificativa de abandono</button>` : ''}${e.dados.tipoBaixa === 'Inutilização' ? ` <button class="botao pequeno" data-inutil="${esc(e.id)}">Termo de inutilização</button>` : ''}` }] }),
       ligar() {
         ui.ligarTabela('baixas');
         document.querySelector('[data-nova-baixa]').addEventListener('click', () => VP.escolherBens('Baixa: quais bens?', (bens) => A.baixa(bens, () => VP.app.render())));
         document.querySelectorAll('[data-termo-baixa]').forEach((el) => el.addEventListener('click', () => { const e = VP.db.pega('eventos', el.dataset.termoBaixa); VP.documentos.termoBaixa([VP.db.pega('bens', e.bemId)], e.dados); }));
+        document.querySelectorAll('[data-abandono]').forEach((el) => el.addEventListener('click', () => VP.termosLivro.abandono([VP.db.pega('bens', VP.db.pega('eventos', el.dataset.abandono).bemId)])));
+        document.querySelectorAll('[data-inutil]').forEach((el) => el.addEventListener('click', () => VP.termosLivro.inutilizacao([VP.db.pega('bens', VP.db.pega('eventos', el.dataset.inutil).bemId)])));
       }
     };
   };

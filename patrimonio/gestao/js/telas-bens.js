@@ -1152,9 +1152,9 @@
         await VP.db.gravarVarias({ bens: validos, eventos: evs });
         ui.resultado({
           titulo: 'Baixa', sucesso: validos.map((b) => `${b.codigo} · ${b.descricao}`), falhas,
-          extra: validos.length && cfg.termoDeBaixa ? `<p><button type="button" class="botao" data-termo-baixa>Imprimir termo de baixa</button></p>` : ''
+          extra: (validos.length && cfg.termoDeBaixa ? `<p><button type="button" class="botao" data-termo-baixa>Imprimir termo de baixa</button></p>` : '') + (validos.length && VP.termosLivro && v.tipoBaixa === 'Abandono' ? '<p><button type="button" class="botao" data-just-abandono>Justificativa de abandono</button></p>' : '') + (validos.length && VP.termosLivro && v.tipoBaixa === 'Inutilização' ? '<p><button type="button" class="botao" data-termo-inutil>Termo de inutilização</button></p>' : '')
         });
-        setTimeout(() => document.querySelector('[data-termo-baixa]')?.addEventListener('click', () => VP.documentos.termoBaixa(validos, v)), 50);
+        setTimeout(() => { document.querySelector('[data-termo-baixa]')?.addEventListener('click', () => VP.documentos.termoBaixa(validos, v)); document.querySelector('[data-just-abandono]')?.addEventListener('click', (e) => { e.target.closest('dialog')?.close(); VP.termosLivro.abandono(validos); }); document.querySelector('[data-termo-inutil]')?.addEventListener('click', (e) => { e.target.closest('dialog')?.close(); VP.termosLivro.inutilizacao(validos); }); }, 50);
         depois && depois();
       }
     });

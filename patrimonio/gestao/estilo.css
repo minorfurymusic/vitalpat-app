@@ -639,3 +639,6 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 #area-impressao .laudo-assinaturas span { display: block; border-top: 1px solid #000; margin-bottom: 4px; }
 #area-impressao .laudo-aprovo { margin-top: 40px; font-size: 13pt; }
 #area-impressao .laudo-linha { display: inline-block; width: 220px; border-bottom: 1px solid #000; }
+
+/* Termos do livro com lei ainda por atualizar (29/10/2026) */
+#area-impressao .doc-aviso-lei { border: 1px dashed #000; padding: 4px 8px; font-size: 9pt; }

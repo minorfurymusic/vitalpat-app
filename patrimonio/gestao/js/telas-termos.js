@@ -116,7 +116,7 @@
           { chave: 'emitidoEm', titulo: 'Aberto em', valor: (t) => u.data(t.emitidoEm), ordenar: (t) => t.emitidoEm },
           { chave: 'prazo', titulo: 'Prazo', valor: (t) => u.data(t.prazo), ordenar: (t) => t.prazo, html: (t) => (TR.vencido(t) ? `<b class="erro-txt">${u.data(t.prazo)}</b>` : u.data(t.prazo)) },
           { chave: 'sit', titulo: 'Situação', valor: (t) => TR.situacaoTexto(t) },
-          { chave: '_acoes', titulo: '', html: (t) => `<button class="botao pequeno" data-termo-imp="${esc(t.id)}">Imprimir</button>${t.situacao === 'aguardando' && pode() ? ` <button class="botao pequeno primario" data-termo-ass="${esc(t.id)}">Anexar assinado</button>` : ''}${t.situacao === 'assinado' && t.assinado?.anexo ? ` <a class="botao pequeno" href="${esc(t.assinado.anexo.dataURL || '#')}" download="${esc(t.assinado.anexo.nome)}">Ver assinado</a>` : ''}` }] })}`,
+          { chave: '_acoes', titulo: '', html: (t) => `<button class="botao pequeno" data-termo-imp="${esc(t.id)}">Imprimir</button>${t.situacao === 'aguardando' && pode() ? ` <button class="botao pequeno primario" data-termo-ass="${esc(t.id)}">Anexar assinado</button>` : ''}${t.situacao === 'assinado' && t.assinado?.anexo ? ` <a class="botao pequeno" href="${esc(t.assinado.anexo.dataURL || '#')}" download="${esc(t.assinado.anexo.nome)}">Ver assinado</a>` : ''}` }] })}${VP.termosLivro ? VP.termosLivro.secaoTermos() : ''}`,
       ligar() {
         const re = () => VP.app.render();
         ui.ligarTabela('termos');
@@ -124,6 +124,8 @@
         document.getElementById('conteudo').onclick = (e) => {
           const i = e.target.closest('[data-termo-imp]'); if (i) return TR.imprimir(VP.db.pega('termosResp', i.dataset.termoImp));
           const a = e.target.closest('[data-termo-ass]'); if (a) return TR.anexarAssinado(VP.db.pega('termosResp', a.dataset.termoAss), re);
+          if (e.target.closest('[data-particular-novo]')) return VP.termosLivro.particular(re);
+          const pi = e.target.closest('[data-particular-imp]'); if (pi) return VP.termosLivro.particular(re, VP.db.pega('termosParticulares', pi.dataset.particularImp));
         };
       }
     };

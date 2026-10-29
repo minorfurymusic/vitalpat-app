@@ -120,7 +120,7 @@ VP.LISTAS = {
   cercamentosImovel: ['Muro', 'Tela / alambrado', 'Cerca', 'Misto', 'Sem cercamento'],
   usuariosImovel: ['Proprietário (a própria prefeitura)', 'Residente', 'Locatário', 'Cessionário', 'Comodatário', 'Arrendatário', 'Permissionário'],
   metodos: { linear: 'Cotas constantes (linear)', somaDigitos: 'Soma dos dígitos', unidades: 'Unidades produzidas' },
-  tiposBaixa: ['Inservível', 'Alienação (leilão)', 'Doação', 'Furto / roubo', 'Extravio', 'Sinistro', 'Permuta', 'Fim da vida útil'],
+  tiposBaixa: ['Inservível', 'Alienação (leilão)', 'Doação', 'Furto / roubo', 'Extravio', 'Sinistro', 'Permuta', 'Fim da vida útil', 'Abandono', 'Inutilização'], // abandono e inutilização: livro págs. 182–183 (29/10/2026)
   // Só para imóveis (etapa 5, 28/10/2026). Formas de alienação da Lei 14.133/2021, art. 76, I [A conferir no texto oficial]
   tiposBaixaImovel: ['Demolição', 'Dação em pagamento', 'Investidura', 'Venda a outro órgão ou entidade pública'],
   tiposTransferencia: { interna: 'Interna (entre unidades)', externa: 'Externa (empréstimo, cessão, conserto fora)', entidade: 'Entre entidades / fundos' },
@@ -215,7 +215,7 @@ VP.COLECOES = ['bens', 'eventos', 'unidades', 'responsaveis', 'classificacoes', 
   // Frota (veículo próprio continua em "bens")
   'veiculosLocados', 'abastecimentos', 'viagens', 'contratosLocacao', 'motoristas', 'planosManutencao', 'multas', 'documentosVeiculo',
   // Imóveis (etapa 5)
-  'documentosImovel', 'cessoesImovel', 'pendenciasImovel', 'avaliacoesImovel',
+  'documentosImovel', 'cessoesImovel', 'pendenciasImovel', 'avaliacoesImovel', 'termosParticulares',
   // Exportar e importar (planilhas)
   'importacoesPlanilha', 'importacoesAnexos',
   // Itens de controle (fora do balancete) e o classificador (vida útil dos itens e decisões guardadas)

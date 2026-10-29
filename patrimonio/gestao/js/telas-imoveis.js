@@ -388,6 +388,7 @@
         ${docs.length ? `<ul class="lista-simples">${docs.map((d) => `<li>${seloDoc(d)} <b>${esc(d.tipo)}</b>${d.numero ? ' ' + esc(d.numero) : ''}${d.validade ? ' · validade ' + u.data(d.validade) : ''}${d.orgao ? ' · ' + esc(d.orgao) : ''} ${arq(d.arquivos)} <button class="botao pequeno" data-imo-doc="${esc(d.id)}">Atualizar</button></li>`).join('')}</ul>` : '<p class="vazio">Nenhum documento. Ex.: matrícula, habite-se, AVCB, alvarás, laudos.</p>'}</section>
       ${cartaoConferencia(b, pode)}
       ${cartaoConstrucoes(b, pode)}
+      ${VP.avaliacoesImovel ? VP.avaliacoesImovel.cartao(b, pode) : ''}
       <section class="cartao secao"><header><h3>Cessões e uso por terceiros</h3><button class="botao pequeno" data-imo="cessao">+ Registrar</button></header>
         ${ces.length ? `<ul class="lista-simples">${ces.map((c) => `<li>${seloCessao(c)} <b>${esc(E.TIPOS_CESSAO[c.tipo])}</b> ${c.direcao === 'a-terceiros' ? 'a' : 'de'} ${esc(c.parte)} · ${u.data(c.inicio)} a ${c.fim ? u.data(c.fim) : 'indeterminado'}${c.instrumento ? ' · ' + esc(c.instrumento) : ''}${c.valor ? ' · ' + u.moeda(c.valor) + '/mês' : ''} ${!c.encerradaEm ? `<button class="botao pequeno" data-imo-renovar="${esc(c.id)}">Renovar</button> <button class="botao pequeno" data-imo-encerrar="${esc(c.id)}">Encerrar</button>` : ''}${c.direcao === 'de-terceiros' && !c.encerradaEm && pode ? ` <button class="botao pequeno" data-imo-benf-ces="${esc(c.id)}">+ Benfeitoria</button>` : ''}${(c.benfeitorias || []).length ? `<ul class="lista-simples">${c.benfeitorias.map((x) => `<li>Benfeitoria ${esc(E.CLASSES_BENF_CURTO[x.classe] || '').toLowerCase()}: ${esc(x.descricao)} · ${u.moeda(x.valor)} · ${u.data(x.data)} · indenizável: ${({ sim: 'sim', nao: 'não', conferir: 'a conferir' })[x.indenizavel] || '—'}</li>`).join('')}<li><b>Total: ${u.moeda(c.benfeitorias.reduce((t, x) => t + (Number(x.valor) || 0), 0))}</b></li></ul>` : ''}</li>`).join('')}</ul>` : '<p class="vazio">Nenhuma.</p>'}</section>
       <section class="cartao secao"><header><h3>Regularização</h3><button class="botao pequeno" data-imo="pendencia">+ Pendência</button></header>
@@ -406,6 +407,7 @@
     area.querySelector('[data-copiar-confrontacoes]')?.addEventListener('click', () => E.copiarConfrontacoes(b, re));
     area.querySelector('[data-benf-nova]')?.addEventListener('click', () => E.editarBenfeitoria(b, re));
     area.querySelector('[data-imo-impressos]')?.addEventListener('click', () => VP.imoveisImpressos.escolher(b, re));
+    if (VP.avaliacoesImovel) VP.avaliacoesImovel.ligar(b, re);
     const benf = (id) => (b.imovel?.benfeitorias || []).find((x) => x.id === id);
     area.querySelectorAll('[data-benf-editar]').forEach((el) => el.addEventListener('click', () => E.editarBenfeitoria(b, re, benf(el.dataset.benfEditar))));
     area.querySelectorAll('[data-benf-excluir]').forEach((el) => el.addEventListener('click', () => E.excluirBenfeitoria(b, benf(el.dataset.benfExcluir), re)));

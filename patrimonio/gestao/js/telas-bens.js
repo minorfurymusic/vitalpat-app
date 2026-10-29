@@ -13,7 +13,8 @@
       ['Registro no cartório', juntar([['', im.registroNumero], ['livro', im.registroLivro], ['folha', im.registroFolha], ['de', im.registroData ? u.data(im.registroData) : '']])],
       ['Desafetação', juntar([['lei', im.leiDesafetacao], ['de', im.dataDesafetacao ? u.data(im.dataDesafetacao) : '']])],
       ['Quem usa o imóvel', im.usuario], ['Residencial ou não', im.residencial], ['Cercamento', im.cercamento],
-      ['Limites e confrontações', im.confrontacoes], ['Servidões', im.servidoes], ['Histórico do imóvel', im.historico]];
+      ['Limites e confrontações', im.confrontacoes], ['Servidões', im.servidoes], ['Histórico do imóvel', im.historico], ['Onde estão os originais em papel', im.localOriginais],
+      im.origemArea && /jacente/i.test(im.origemArea) ? ['Atenção', 'Herança jacente: o imóvel está sob curador e ainda não é da prefeitura. Quando for declarado vacante, troque a forma de ingresso para "Herança vacante".'] : null].filter(Boolean);
   };
   const T = VP.telas = VP.telas || {};
   const A = VP.acoes = VP.acoes || {};
@@ -475,6 +476,7 @@
       { chave: 'imovel.confrontacoes', rotulo: 'Limites e confrontações', tipo: 'area', ajuda: 'Quem faz divisa em cada lado (copie da matrícula).' },
       { chave: 'imovel.servidoes', rotulo: 'Servidões', tipo: 'area', ajuda: 'Finalidade e a favor de quem (ex.: passagem de rede de esgoto).' },
       { chave: 'imovel.historico', rotulo: 'Histórico do imóvel', tipo: 'area', ajuda: 'Ações judiciais, cessões antigas, mudanças de uso…' },
+      { chave: 'imovel.localOriginais', rotulo: 'Onde estão os originais em papel', placeholder: 'Ex.: Arquivo do Patrimônio, pasta 12; plantas na mapoteca, gaveta 3', ajuda: 'Os originais ficam no arquivo; as cópias (fotos e PDFs) vão em Documentos do imóvel.' },
       { chave: 'imovel.valorTerreno', rotulo: 'Valor do terreno (não deprecia)', tipo: 'moeda', largura: 'meia', ajuda: 'Separado da edificação. Informativo para o relatório.' },
       { chave: 'imovel.origemArea', rotulo: 'Forma de ingresso (origem)', tipo: 'select', opcoes: L.origensImovel.map((x) => [x, x]), largura: 'meia' }] },
     veiculo: { titulo: 'Veículo', campos: [

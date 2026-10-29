@@ -116,7 +116,7 @@ VP.LISTAS = {
   situacoesAquisicao: ['Compra', 'Doação recebida', 'Cessão recebida', 'Permuta', 'Construção / obra', 'Desapropriação', 'Dação em pagamento', 'Loteamento (área pública)', 'Saldo inicial'],
   // Imóveis (livro "Gestão patrimonial", item 4.2 — etapa 1, 28/10/2026)
   usosImovel: ['Uso comum do povo', 'Uso especial', 'Dominical', 'Em andamento (obra)', 'Demais bens imóveis'],
-  origensImovel: ['Compra', 'Construção', 'Doação', 'Permuta', 'Usucapião', 'Desapropriação', 'Dação em pagamento', 'Herança vacante', 'Área pública de loteamento', 'Outra'],
+  origensImovel: ['Compra', 'Construção', 'Doação', 'Permuta', 'Usucapião', 'Desapropriação', 'Dação em pagamento', 'Herança vacante', 'Herança jacente (sob curador, ainda não incorporada)', 'Área pública de loteamento', 'Outra'], // jacente: livro pág. 329 (29/10/2026)
   cercamentosImovel: ['Muro', 'Tela / alambrado', 'Cerca', 'Misto', 'Sem cercamento'],
   usuariosImovel: ['Proprietário (a própria prefeitura)', 'Residente', 'Locatário', 'Cessionário', 'Comodatário', 'Arrendatário', 'Permissionário'],
   metodos: { linear: 'Cotas constantes (linear)', somaDigitos: 'Soma dos dígitos', unidades: 'Unidades produzidas' },
@@ -215,7 +215,7 @@ VP.COLECOES = ['bens', 'eventos', 'unidades', 'responsaveis', 'classificacoes', 
   // Frota (veículo próprio continua em "bens")
   'veiculosLocados', 'abastecimentos', 'viagens', 'contratosLocacao', 'motoristas', 'planosManutencao', 'multas', 'documentosVeiculo',
   // Imóveis (etapa 5)
-  'documentosImovel', 'cessoesImovel', 'pendenciasImovel',
+  'documentosImovel', 'cessoesImovel', 'pendenciasImovel', 'avaliacoesImovel',
   // Exportar e importar (planilhas)
   'importacoesPlanilha', 'importacoesAnexos',
   // Itens de controle (fora do balancete) e o classificador (vida útil dos itens e decisões guardadas)

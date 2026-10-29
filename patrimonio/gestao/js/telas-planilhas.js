@@ -103,6 +103,7 @@
     { k: 'imovel.confrontacoes', t: 'Limites e confrontações', tipo: 'texto', g: ['imovel'] },
     { k: 'imovel.servidoes', t: 'Servidões', tipo: 'texto', g: ['imovel'] },
     { k: 'imovel.historico', t: 'Histórico do imóvel', tipo: 'texto', g: ['imovel'] },
+    { k: 'imovel.localOriginais', t: 'Onde estão os originais', tipo: 'texto', g: ['imovel'], ajuda: 'Pasta, armário, mapoteca.' },
     { k: 'imovel.valorTerreno', t: 'Valor do terreno', tipo: 'moeda', g: ['imovel'] },
     { k: 'endereco.logradouro', t: 'Endereço', tipo: 'texto', g: ['imovel'] },
     { k: 'endereco.bairro', t: 'Bairro', tipo: 'texto', g: ['imovel'] },

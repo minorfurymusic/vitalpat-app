@@ -58,6 +58,7 @@
     { k: 'situacaoAquisicao', t: 'Como entrou', tipo: 'opcao', opcoes: () => L.situacoesAquisicao, g: TODOS, soNovo: true, ajuda: 'Compra, Doação recebida… (aba Listas). Vazio = Compra.' },
     { k: 'fornecedorId', t: 'Fornecedor', tipo: 'ref', ref: 'fornecedores', g: TODOS, ajuda: 'Nome ou CNPJ do fornecedor já cadastrado.' },
     { k: 'nf.numero', t: 'Nota fiscal', tipo: 'texto', g: TODOS },
+    { k: 'naturezaDespesa', t: 'Natureza de despesa', tipo: 'texto', g: TODOS, apelidos: ['natureza', 'elemento de despesa', 'natureza da despesa'], ajuda: 'Do empenho. Ex.: 4.4.90.52 ou 4.4.90.52.42.' },
     { k: 'nf.emissao', t: 'Emissão da nota', tipo: 'data', g: TODOS, ajuda: 'dd/mm/aaaa.' },
     { k: 'origem.empenho', t: 'Empenho', tipo: 'texto', g: TODOS, ajuda: 'Ano/número.' },
     { k: 'detalhes.marca', t: 'Marca', tipo: 'texto', g: ['movel', 'veiculo'] },

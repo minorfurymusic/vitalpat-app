@@ -139,12 +139,30 @@
     const n = VP.db.lista('inventarios', true).filter((i) => String(i.numero || '').startsWith(`INV-${ano}-`)).length + 1;
     return `INV-${ano}-${String(n).padStart(2, '0')}`;
   };
-  IC.criar = async (unidadeId) => {
+  // Livro "Gestão patrimonial", págs. 123–131 (28/10/2026): tipo do inventário, comissão, prazo, justificativa das faltas
+  IC.TIPOS = { anual: 'Anual', inicial: 'Inicial', transferencia: 'Transferência de responsabilidade', extincao: 'Extinção ou mudança da unidade', eventual: 'Eventual' };
+  IC.JUSTIFICATIVAS = { sem: 'Sem justificativa (fica como extraviado)', conserto: 'Em conserto', emprestado: 'Emprestado ou cedido', transferido: 'Transferido sem registro', outro: 'Outro motivo' };
+  IC.prazoVencido = (inv) => inv.situacao === 'aberto' && !!inv.prazoFim && inv.prazoFim < hoje();
+  // Segregação de funções (Acórdão TCU 2.310/2007, 2ª Câmara, citado no livro): quem responde pelos bens não deve conferir a si mesmo
+  IC.conflitosComissao = (inv) => {
+    const c = VP.db.pega('comissoes', inv.comissaoId); if (!c || !c.membros) return [];
+    const membros = String(c.membros).toLowerCase();
+    const nomes = new Set(Object.keys(inv.esperados).map((id) => nomeResp(VP.db.pega('bens', id)?.responsavelId)).filter((n) => n && n !== '—'));
+    return [...nomes].filter((n) => { const base = String(n).replace(/\s*\(.*\)\s*$/, '').trim().toLowerCase(); return base.length > 3 && membros.includes(base); });
+  };
+  IC.divergencia = (inv) => {
+    const r = IC.resumo(inv), prev = Object.keys(inv.esperados).length;
+    const sobras = r.deFora.length + r.sobras.length;
+    return { previstos: prev, encontrados: prev - r.faltaram.length, faltas: r.faltaram.length, sobras, semPlaqueta: r.sobras.filter((x) => !x.plaqueta).length,
+      maior: prev ? (sobras / prev) * 100 : 0, menor: prev ? (r.faltaram.length / prev) * 100 : 0 };
+  };
+  IC.criar = async (unidadeId, extra = {}) => {
     const bens = VP.db.lista('bens').filter((b) => b.unidadeId === unidadeId && b.status !== 'baixado');
     const numero = IC.proximoNumero();
     const inv = {
       id: u.id(), numero, nome: `${numero} · ${VP.nome('unidades', unidadeId)}`, unidadeId, origem: 'celular',
       dataCorte: hoje(), situacao: 'aberto', esperados: Object.fromEntries(bens.map((b) => [b.id, unidadeId])),
+      tipo: extra.tipo || 'anual', comissaoId: extra.comissaoId || '', prazoFim: extra.prazoFim || '',
       leituras: {}, sobras: [], criadoPor: quem(), abertoEm: agora(),
       historico: [{ em: agora(), por: quem(), descricao: `Inventário aberto pelo celular (${bens.length} bens esperados)` }]
     };
@@ -365,6 +383,9 @@
   const FUNDAMENTO_PDF = FUNDAMENTO_TELA + '; art. 83 da Lei nº 4.320/1964; art. 87 do Decreto-Lei nº 200/1967; item 7.11 da Instrução Normativa nº 205/1988';
   const dataExtenso = (iso) => { const d = new Date(iso); return `${d.getDate()} de ${['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][d.getMonth()]} de ${d.getFullYear()}, ${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`; };
   const orgao = (unidadeId) => { const un = VP.db.pega('unidades', unidadeId); return un?.entidadeId ? VP.nome('entidades', un.entidadeId) : (VP.db.lista('entidades')[0]?.nome || 'Prefeitura Municipal'); };
+  IC.textoAssinatura = (t) => { const a = t.assinaturaCelular; if (!a) return 'Sem assinatura (segue o prazo normal)';
+    return { recusado: `Recusou · testemunha ${esc(a.testemunha || '')}`, assinado: 'Assinado na tela', delegado: `Responsável ausente · assinado pelo delegado ${esc(a.delegado || '')}`,
+      revelia: `Responsável ausente, sem delegado · à revelia (testemunha ${esc(a.testemunha || '')})${a.autenticadoEm ? ` · autenticado por ${esc(a.autenticadoPor || '')}` : ' · <b>falta autenticar</b>'}` }[a.situacao] || a.situacao; };
   IC.textoTermo = (t, { completo = false, inv = null } = {}) => {
     const r = VP.db.pega('responsaveis', t.responsavelId) || {};
     const bens = t.bens.map((id) => VP.db.pega('bens', id)).filter(Boolean);
@@ -383,10 +404,12 @@
       <p><b>Total:</b> ${bens.length} bem(ns)</p>
       <p class="cel-lei">Fundamento: ${esc(completo ? FUNDAMENTO_PDF : FUNDAMENTO_TELA)}.</p>
       <p>${esc(VP.nome('unidades', t.unidadeId))}, ${esc(dataExtenso(quando))}.</p>
+      ${a?.situacao === 'delegado' ? `<div class="cel-recusa"><b>Responsável ausente.</b> Assina por delegação ${esc(a.delegado)}${a.delegacao ? ` (${esc(a.delegacao)})` : ''}, em ${esc(u.data(dataLocal(a.em)))} às ${esc(horaLocal(a.em))}.</div>` : ''}
+      ${a?.situacao === 'revelia' ? `<div class="cel-recusa"><b>Inventário à revelia.</b> O responsável estava ausente e não deixou delegado. Conferência feita por ${esc(a.testemunha)}${a.autenticadoEm ? `, autenticada pela autoridade (${esc(a.autenticadoPor)}) em ${esc(u.data(dataLocal(a.autenticadoEm)))}` : ', aguardando autenticação da autoridade'}. A ausência não afasta a responsabilidade pelos bens.</div>` : ''}
       ${a?.situacao === 'recusado' ? `<div class="cel-recusa"><b>Recusa de assinatura.</b> Em ${esc(u.data(dataLocal(a.em)))}, às ${esc(horaLocal(a.em))}, ${esc(r.nome || '')} recusou-se a assinar este termo.${a.motivo ? ` Motivo informado: "${esc(a.motivo)}".` : ''} A recusa não afasta a responsabilidade pelos bens, nos termos do fundamento acima. Testemunha: ${esc(a.testemunha)}, que realizou o inventário.</div>` : ''}
       <div class="cel-doc-ass">
-        <div>${a?.situacao === 'assinado' && a.imagem?.dataURL ? `<img src="${esc(a.imagem.dataURL)}" alt="Assinatura">` : ''}<span>${a?.situacao === 'recusado' ? 'Recusou-se a assinar' : `${esc(r.nome || '')}<br>Responsável`}</span></div>
-        <div>${a?.situacao === 'recusado' && a.imagemTestemunha?.dataURL ? `<img src="${esc(a.imagemTestemunha.dataURL)}" alt="Assinatura da testemunha">` : ''}<span>${esc(a?.testemunha || inv?.criadoPor || quem())}<br>${a?.situacao === 'recusado' ? 'Testemunha' : 'Inventariante'}</span></div>
+        <div>${['assinado', 'delegado'].includes(a?.situacao) && a.imagem?.dataURL ? `<img src="${esc(a.imagem.dataURL)}" alt="Assinatura">` : ''}<span>${a?.situacao === 'recusado' ? 'Recusou-se a assinar' : a?.situacao === 'delegado' ? `${esc(a.delegado)}<br>Delegado do responsável` : a?.situacao === 'revelia' ? `${esc(r.nome || '')}<br>Ausente (à revelia)` : `${esc(r.nome || '')}<br>Responsável`}</span></div>
+        <div>${['recusado', 'revelia'].includes(a?.situacao) && a.imagemTestemunha?.dataURL ? `<img src="${esc(a.imagemTestemunha.dataURL)}" alt="Assinatura da testemunha">` : ''}<span>${esc(a?.testemunha || inv?.criadoPor || quem())}<br>${['recusado', 'revelia'].includes(a?.situacao) ? 'Testemunha' : 'Inventariante'}</span></div>
       </div>
       ${a ? `<p class="cel-doc-reg">Assinatura ${a.situacao === 'recusado' ? 'da testemunha ' : ''}feita na tela do celular em ${esc(u.data(dataLocal(a.em)))} às ${esc(horaLocal(a.em))}, registrada por ${esc(a.registradoPor || '')}.</p>` : ''}
     </div>`;
@@ -441,9 +464,12 @@
       titulo: 'Inventariar',
       html: `<div class="cel">
         ${ab.length ? `<h3 class="cel-h">Continuar um inventário</h3><ul class="cel-lista">${ab.map((i) => { const p = IC.progresso(i); return `<li><a href="#campo-inventario/${esc(i.id)}" data-continuar="${esc(i.id)}"><span class="cel-lista-topo"><b>${esc(i.nome)}</b><span class="cel-etq ${i.pendenteResposta ? 'cel-etq-alerta' : ''}">${esc(i.pendenteResposta ? (i.pendenteResposta.tipo === 'recusa' ? 'recusado: corrigir' : 'esclarecimento pedido') : 'aberto')}</span></span>
-          <span class="cel-barra"><i style="width:${p.total ? Math.round(p.lidos / p.total * 100) : 0}%"></i></span><small>${p.lidos} de ${p.total} lidos · aberto por ${esc(i.criadoPor || '')} em ${u.data(dataLocal(i.abertoEm))}</small></a></li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum inventário aberto. Abra um novo escolhendo a unidade.</p>'}
+          <span class="cel-barra"><i style="width:${p.total ? Math.round(p.lidos / p.total * 100) : 0}%"></i></span><small>${p.lidos} de ${p.total} lidos · aberto por ${esc(i.criadoPor || '')} em ${u.data(dataLocal(i.abertoEm))}${i.prazoFim ? ` · prazo ${u.data(i.prazoFim)}${IC.prazoVencido(i) ? ' <b class="cel-etq cel-etq-alerta">vencido</b>' : ''}` : ''}</small></a></li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum inventário aberto. Abra um novo escolhendo a unidade.</p>'}
         <h3 class="cel-h">Novo inventário</h3>
         ${unidades.length ? `<form class="cel-form" data-novo-inv><label class="cel-rotulo">Unidade (ex.: a escola)<select data-unidade required><option value="">Escolha…</option>${unidades.map((x) => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('')}</select></label>
+          <label class="cel-rotulo">Tipo<select data-tipo>${Object.entries(IC.TIPOS).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></label>
+          <label class="cel-rotulo">Comissão (a que foi nomeada para o inventário)<select data-comissao><option value="">Sem comissão</option>${VP.db.lista('comissoes').map((c) => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}</select></label>
+          <label class="cel-rotulo">Prazo para terminar<input type="date" data-prazo value="${u.somaDias(hoje(), 30)}"></label>
           <button class="botao primario cel-largo">Abrir inventário</button>
           <p class="ajuda">O sistema guarda onde cada bem deveria estar, para comparar no fim. Nada muda no cadastro até a análise.</p></form>` : '<p class="aviso-inline">Nenhuma unidade cadastrada. Cadastre em Cadastros → Unidades.</p>'}
       </div>`,
@@ -451,7 +477,7 @@
         document.querySelector('[data-novo-inv]')?.addEventListener('submit', async (e) => {
           e.preventDefault();
           const un = e.target.querySelector('[data-unidade]').value; if (!un) return;
-          const inv = await IC.criar(un);
+          const inv = await IC.criar(un, { tipo: e.target.querySelector('[data-tipo]').value, comissaoId: e.target.querySelector('[data-comissao]').value, prazoFim: e.target.querySelector('[data-prazo]').value });
           ui.aviso(`Inventário ${inv.numero} aberto.`);
           VP.app.ir('#campo-inventario/' + inv.id);
         });
@@ -591,7 +617,7 @@
         </div>
         ${r.respDePara.length ? `<h3 class="cel-h">Responsáveis (de → para)</h3><ul class="cel-lista">${r.respDePara.map((x) => `<li class="cel-li">${esc(x.texto)} · ${x.n} bem(ns)</li>`).join('')}</ul>` : ''}
         <h3 class="cel-h">Termos de responsabilidade</h3>
-        ${grupos.length ? `<ul class="cel-lista">${grupos.map((g) => { const t = termos.find((x) => x.responsavelId === g.responsavelId && [...x.bens].sort().join('|') === g.bens.join('|')); const a = t?.assinaturaCelular; return `<li class="cel-li">${esc(nomeResp(g.responsavelId))} · ${g.bens.length} bem(ns) · ${a ? (a.situacao === 'recusado' ? '<b>recusou (com testemunha)</b>' : '<b>assinado</b>') : 'falta assinar'}</li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum bem lido com responsável: não há termo a assinar.</p>'}
+        ${grupos.length ? `<ul class="cel-lista">${grupos.map((g) => { const t = termos.find((x) => x.responsavelId === g.responsavelId && [...x.bens].sort().join('|') === g.bens.join('|')); const a = t?.assinaturaCelular; return `<li class="cel-li">${esc(nomeResp(g.responsavelId))} · ${g.bens.length} bem(ns) · ${a ? ({ recusado: '<b>recusou (com testemunha)</b>', delegado: '<b>assinado pelo delegado</b>', revelia: '<b>à revelia (a Gestão autentica)</b>' }[a.situacao] || '<b>assinado</b>') : 'falta assinar'}</li>`; }).join('')}</ul>` : '<p class="ajuda">Nenhum bem lido com responsável: não há termo a assinar.</p>'}
         ${avisoPedido(inv)}
         ${IC.blocoItens(inv)}
         <label class="cel-rotulo">${inv.pendenteResposta ? 'Explique o que você fez (obrigatório)' : 'Observação (opcional): explique o que for preciso'}<textarea data-obs-envio rows="3">${esc(inv.obsRascunho || '')}</textarea></label>
@@ -640,19 +666,23 @@
     const t = VP.db.pega('termosResp', id);
     if (!t) return { titulo: 'Termo', html: '<p>Termo não encontrado.</p>' };
     const inv = t.inventarioId ? VP.db.pega('inventarios', t.inventarioId) : null;
-    const recusa = query.recusa === '1';
+    const recusa = query.recusa === '1', ausente = query.ausente === '1';
     const r = VP.db.pega('responsaveis', t.responsavelId) || {};
     const voltar = inv ? `#campo-concluir/${inv.id}` : '#campo-termo';
     return {
-      titulo: recusa ? 'Recusa de assinatura' : 'Termo de responsabilidade',
+      titulo: recusa ? 'Recusa de assinatura' : ausente ? 'Responsável ausente' : 'Termo de responsabilidade',
       html: `<div class="cel cel-com-barra">
         ${IC.textoTermo(t, { inv })}
         ${t.assinaturaCelular ? `<p class="aviso-inline">Este termo já foi ${t.assinaturaCelular.situacao === 'recusado' ? 'registrado com recusa' : 'assinado'}. Assinar de novo substitui o registro anterior.</p>` : ''}
         ${recusa ? `<label class="cel-rotulo">Motivo (se a pessoa disser)<input data-motivo placeholder="Opcional"></label>
           ${quadroAssinatura(`Assinatura da testemunha: ${quem()}`, 'Quem fez o inventário assina')}`
+          : ausente ? `<p class="ajuda">O responsável não está. Se ele deixou alguém <b>delegado</b>, essa pessoa assina. Sem delegado, o inventário fica <b>à revelia</b>: você assina como testemunha e a autoridade autentica na Gestão.</p>
+          <label class="cel-rotulo">Nome do delegado (vazio = à revelia)<input data-delegado></label><label class="cel-rotulo">Documento da delegação (portaria, ofício)<input data-delegacao placeholder="Opcional"></label>
+          ${quadroAssinatura('Assinatura do delegado (ou sua, como testemunha, se for à revelia)', 'Assine com o dedo')}`
           : quadroAssinatura(`Assinatura de ${r.nome || nomeResp(t.responsavelId)}`, 'Assine com o dedo')}
         <div class="cel-barra-acoes">${recusa ? `<a class="botao" href="#campo-assinar/${esc(t.id)}">Voltar</a><button type="button" class="botao primario" data-registrar-recusa>Registrar recusa</button>`
-          : `<a class="botao perigo" href="#campo-assinar/${esc(t.id)}?recusa=1">Não quer assinar</a><button type="button" class="botao primario" data-assinar>Assinar</button>`}</div>
+          : ausente ? `<a class="botao" href="#campo-assinar/${esc(t.id)}">Voltar</a><button type="button" class="botao primario" data-registrar-ausente>Registrar</button>`
+          : `<a class="botao perigo" href="#campo-assinar/${esc(t.id)}?recusa=1">Não quer assinar</a><a class="botao" href="#campo-assinar/${esc(t.id)}?ausente=1">Ausente</a><button type="button" class="botao primario" data-assinar>Assinar</button>`}</div>
         <p class="cel-pdf"><button type="button" class="botao pequeno" data-pdf>Ver PDF do termo</button></p>
       </div>`,
       ligar() {
@@ -671,6 +701,17 @@
           if (!inv) { t.situacao = 'assinado'; t.assinado = { data: hoje(), eletronico: true }; }
           await VP.db.gravar('termosResp', t);
           ui.aviso('Termo assinado.');
+          await proximo();
+        });
+        raiz.querySelector('[data-registrar-ausente]')?.addEventListener('click', async () => {
+          if (pad.vazia()) { ui.aviso('Falta a assinatura no quadro.'); return; }
+          const delegado = raiz.querySelector('[data-delegado]').value.trim(), delegacao = raiz.querySelector('[data-delegacao]').value.trim();
+          const img = { id: u.id(), nome: `${delegado ? 'delegado' : 'testemunha'}-termo-${t.numero.replace('/', '-')}.png`, tipo: 'image/png', dataURL: pad.imagem() };
+          t.assinaturaCelular = delegado ? { situacao: 'delegado', em: agora(), registradoPor: quem(), delegado, delegacao, imagem: img }
+            : { situacao: 'revelia', em: agora(), registradoPor: quem(), testemunha: quem(), imagemTestemunha: img };
+          t.historico = (t.historico || []).concat([{ data: agora(), descricao: delegado ? `Responsável ausente: assinado pelo delegado ${delegado}` : `Responsável ausente, sem delegado: à revelia, testemunha ${quem()}`, usuario: quem() }]);
+          await VP.db.gravar('termosResp', t);
+          ui.aviso(delegado ? 'Assinado pelo delegado.' : 'Registrado à revelia: a Gestão precisa autenticar.');
           await proximo();
         });
         raiz.querySelector('[data-registrar-recusa]')?.addEventListener('click', async () => {
@@ -748,15 +789,23 @@
     let corpo = '';
     if (aba === 'mudancas') corpo = r.mudancas.length ? `<table class="tabela"><thead><tr>${pode ? '<th></th>' : ''}<th>Plaqueta</th><th>Bem</th><th>O que muda (de → para)</th><th>Fotos</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.mudancas.map(({ b, lista }) => `<tr>${pode ? `<td><input type="checkbox" data-aplicar="${esc(b.id)}" checked aria-label="Aplicar mudanças do bem ${esc(b.plaqueta)}"></td>` : ''}<td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}${inv.esperados[b.id] ? '' : ' <span class="selo-atencao">de outra unidade</span>'}</td>
         <td>${lista.map((m) => `${esc(m.rotulo)}: ${m.de ? `<s>${esc(m.de)}</s> → ` : ''}<b>${esc(m.para)}</b>${m.campo === 'estado' && m.para === 'Imprestável' ? ' <span class="selo-alerta">vai para baixa</span>' : ''}`).join('<br>')}</td><td class="cel-mini">${fotos(inv.leituras[b.id].fotos)}</td>${pode ? `<td>${botaoPedido('bem', b.id)}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<p class="ajuda">Nenhuma mudança.</p>';
-    else if (aba === 'faltaram') corpo = r.faltaram.length ? `<table class="tabela"><thead><tr><th>Plaqueta</th><th>Bem</th><th>Responsável</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.faltaram.map((b) => `<tr><td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}</td><td>${esc(nomeResp(b.responsavelId))}</td>${pode ? `<td>${botaoPedido('bem', b.id)}</td>` : ''}</tr>`).join('')}</tbody></table><p class="ajuda">Ao aprovar, cada bem que faltou recebe o registro "não localizado" com o número do inventário. O cadastro não muda.</p>` : '<p class="ajuda">Nenhum bem faltou.</p>';
+    else if (aba === 'faltaram') {
+      const just = inv.justificativas || {};
+      const conserto = (id) => VP.db.lista('chamados').filter((c) => c.bemId === id && !['concluido', 'cancelado'].includes(c.situacao));
+      corpo = r.faltaram.length ? `<table class="tabela"><thead><tr><th>Plaqueta</th><th>Bem</th><th>Responsável</th><th>Justificativa</th><th>Documento</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.faltaram.map((b) => { const j = just[b.id] || {}; const ch = conserto(b.id); return `<tr><td><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a></td><td>${esc(b.descricao)}${ch.length ? `<br><span class="selo-atencao">chamado aberto: ${esc(ch.map((c) => c.numero).join(', '))}</span>` : ''}</td><td>${esc(nomeResp(b.responsavelId))}</td>
+        <td>${pode ? `<select data-just="${esc(b.id)}">${Object.entries(IC.JUSTIFICATIVAS).map(([k, n]) => `<option value="${k}" ${(j.motivo || 'sem') === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : esc(IC.JUSTIFICATIVAS[j.motivo || 'sem'])}</td>
+        <td>${pode ? `<input data-just-doc="${esc(b.id)}" value="${esc(j.documento || (ch[0] ? 'Chamado ' + ch[0].numero : ''))}" placeholder="Nº do chamado, termo, ofício…">` : esc(j.documento || '')}</td>${pode ? `<td>${botaoPedido('bem', b.id)}</td>` : ''}</tr>`; }).join('')}</tbody></table>
+        <p class="ajuda">Ao aprovar, cada bem que faltou recebe o registro "não localizado" com o número do inventário. <b>Sem justificativa aceita, o bem fica marcado como extraviado</b> (abre pendência para apurar: sindicância ou termo circunstanciado). Em conserto, emprestado ou transferido pedem o documento. O cadastro não muda.</p>` : '<p class="ajuda">Nenhum bem faltou.</p>';
+    }
     else if (aba === 'sobraram') corpo = `${r.deFora.length ? `<h3>Bens de outra unidade achados aqui</h3><ul>${r.deFora.map((b) => `<li><a href="#bem/${esc(b.id)}">${esc(b.plaqueta)}</a> · ${esc(b.descricao)} (cadastro: ${esc(VP.nome('unidades', b.unidadeId))}) ${pode ? botaoPedido('bem', b.id) : ''}</li>`).join('')}</ul>` : ''}
         ${r.sobras.length ? `<h3>Sem cadastro ou sem plaqueta</h3><table class="tabela"><thead><tr><th>Plaqueta</th><th>O que é</th><th>Estado</th><th>Local</th><th>Fotos</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${r.sobras.map((s) => `<tr><td>${esc(s.plaqueta || 'sem plaqueta')}</td><td>${esc(s.descricao)}</td><td>${esc(s.estado ? nomeEstado(s.estado) : '')}</td><td>${esc(s.localizacao || '')}</td><td class="cel-mini">${fotos(s.fotos)}</td>${pode ? `<td>${botaoPedido('sobra', s.id)}</td>` : ''}</tr>`).join('')}</tbody></table><p class="ajuda">Sobras não viram bem sozinhas: cadastre pela tela Novo bem.</p>` : ''}${!r.deFora.length && !r.sobras.length ? '<p class="ajuda">Nada sobrou.</p>' : ''}`;
     else if (aba === 'sem') corpo = r.semMudanca.length ? `<ul>${r.semMudanca.map((b) => `<li>${esc(b.plaqueta)} · ${esc(b.descricao)}</li>`).join('')}</ul>` : '<p class="ajuda">Nenhum.</p>';
-    else corpo = termos.length ? `<table class="tabela"><thead><tr><th>Termo</th><th>Responsável</th><th>Bens</th><th>Assinatura</th><th></th></tr></thead><tbody>${termos.map((t) => `<tr><td>${esc(t.numero)}</td><td>${esc(nomeResp(t.responsavelId))}</td><td>${t.bens.length}</td><td>${t.assinaturaCelular ? (t.assinaturaCelular.situacao === 'recusado' ? `Recusou · testemunha ${esc(t.assinaturaCelular.testemunha)}` : 'Assinado na tela') : 'Sem assinatura (segue o prazo normal)'}</td><td><button type="button" class="botao pequeno" data-pdf="${esc(t.id)}">PDF</button></td></tr>`).join('')}</tbody></table>` : '<p class="ajuda">Sem termos.</p>';
+    else corpo = termos.length ? `<table class="tabela"><thead><tr><th>Termo</th><th>Responsável</th><th>Bens</th><th>Assinatura</th><th></th></tr></thead><tbody>${termos.map((t) => `<tr><td>${esc(t.numero)}</td><td>${esc(nomeResp(t.responsavelId))}</td><td>${t.bens.length}</td><td>${IC.textoAssinatura(t)}${pode && t.assinaturaCelular?.situacao === 'revelia' && !t.assinaturaCelular.autenticadoEm ? ` <button type="button" class="botao pequeno" data-autenticar="${esc(t.id)}">Autenticar</button>` : ''}</td><td><button type="button" class="botao pequeno" data-pdf="${esc(t.id)}">PDF</button></td></tr>`).join('')}</tbody></table>` : '<p class="ajuda">Sem termos.</p>';
     return {
       titulo: `Análise do inventário ${inv.numero}`,
-      acoes: `<a class="botao" href="#inventario">‹ Inventário</a> ${botoesPlanilha(inv)}`,
-      html: `<p class="ajuda">${esc(VP.nome('unidades', inv.unidadeId))} · aberto por ${esc(inv.criadoPor || '')}${inv.enviadoEm ? ` · enviado por ${esc(inv.enviadoPor || '')} em ${u.data(dataLocal(inv.enviadoEm))} às ${esc(horaLocal(inv.enviadoEm))}` : ''} · situação: <b>${esc(IC.situacaoTexto(inv))}</b></p>
+      acoes: `<a class="botao" href="#inventario">‹ Inventário</a> ${botoesPlanilha(inv)} <button class="botao" data-relatorio-comissao>Relatório da comissão</button>${podeAprovar() && inv.situacao !== 'encerrado' ? ' <button class="botao" data-prorrogar>Prorrogar prazo</button>' : ''}`,
+      html: `${(() => { const c = VP.db.pega('comissoes', inv.comissaoId); const conf = IC.conflitosComissao(inv); return `<p class="ajuda">Tipo: <b>${esc(IC.TIPOS[inv.tipo] || 'Anual')}</b> · comissão: <b>${esc(c ? c.nome : 'sem comissão')}</b>${c?.ato ? ' (' + esc(c.ato) + ')' : ''}${inv.prazoFim ? ` · prazo: <b>${u.data(inv.prazoFim)}</b>${IC.prazoVencido(inv) ? ' <span class="selo-alerta">vencido</span>' : ''}` : ''}</p>${conf.length ? `<p class="aviso-inline"><b>Atenção (segregação de funções):</b> ${esc(conf.join(', '))} responde por bens desta unidade e faz parte da comissão. O livro, citando o TCU (Acórdão 2.310/2007), recomenda que quem cuida dos bens não confira a si mesmo.</p>` : ''}`; })()}<p class="ajuda">${esc(VP.nome('unidades', inv.unidadeId))} · aberto por ${esc(inv.criadoPor || '')}${inv.enviadoEm ? ` · enviado por ${esc(inv.enviadoPor || '')} em ${u.data(dataLocal(inv.enviadoEm))} às ${esc(horaLocal(inv.enviadoEm))}` : ''} · situação: <b>${esc(IC.situacaoTexto(inv))}</b></p>
+        ${(() => { const d = IC.divergencia(inv); return `<div class="resumo-linha">${VP.graficos.numero('Divergência (sobras)', d.maior.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%', `${d.sobras} sobra(s) ÷ ${d.previstos} cadastrados`)}${VP.graficos.numero('Divergência (faltas)', d.menor.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%', `${d.faltas} falta(s) ÷ ${d.previstos} cadastrados`)}</div>`; })()}
         <div class="resumo-linha">${VP.graficos.numero('Bens lidos', u.inteiro(r.lidos.length))}${VP.graficos.numero('Faltaram', u.inteiro(r.faltaram.length))}${VP.graficos.numero('Sobraram', u.inteiro(r.deFora.length + r.sobras.length))}${VP.graficos.numero('Mudam de responsável', u.inteiro(r.respDePara.reduce((t, x) => t + x.n, 0)))}${VP.graficos.numero('Mudam de estado', u.inteiro(r.estado))}</div>
         <nav class="abas">${abas.map(([k, n]) => `<a href="#inventario-analise/${esc(inv.id)}?aba=${k}" class="${k === aba ? 'ativa' : ''}">${esc(n)}</a>`).join('')}</nav>
         <section class="cartao">${corpo}</section>
@@ -770,6 +819,21 @@
         const raiz = document.getElementById('conteudo');
         raiz.querySelectorAll('[data-pdf]').forEach((el) => el.addEventListener('click', () => IC.imprimirTermo(VP.db.pega('termosResp', el.dataset.pdf))));
         ligarPlanilha(inv);
+        document.querySelector('[data-relatorio-comissao]')?.addEventListener('click', () => IC.relatorioComissao(inv));
+        document.querySelector('[data-prorrogar]')?.addEventListener('click', () => ui.formulario({ titulo: 'Prorrogar prazo do inventário', largura: 'pequena', textoSalvar: 'Prorrogar',
+          campos: [{ chave: 'prazo', rotulo: 'Novo prazo', tipo: 'data', obrigatorio: true }, { chave: 'motivo', rotulo: 'Justificativa', tipo: 'area', obrigatorio: true }],
+          valores: { prazo: u.somaDias(inv.prazoFim && inv.prazoFim > hoje() ? inv.prazoFim : hoje(), 15) },
+          salvar: async (v) => { if (v.prazo <= hoje()) return 'O novo prazo precisa ser depois de hoje.'; const antes = inv.prazoFim; inv.prazoFim = v.prazo; historico(inv, `Prazo prorrogado: ${antes ? u.data(antes) : 'sem prazo'} → ${u.data(v.prazo)} · ${v.motivo}`); await VP.db.gravar('inventarios', inv); ui.aviso('Prazo prorrogado.'); VP.app.render(); } }));
+        const gravarJust = async (id) => { inv.justificativas = inv.justificativas || {}; inv.justificativas[id] = { motivo: raiz.querySelector(`[data-just="${id}"]`).value, documento: raiz.querySelector(`[data-just-doc="${id}"]`).value.trim(), por: quem(), em: agora() }; await VP.db.gravar('inventarios', inv); };
+        raiz.querySelectorAll('[data-just]').forEach((el) => el.addEventListener('change', () => gravarJust(el.dataset.just)));
+        raiz.querySelectorAll('[data-just-doc]').forEach((el) => el.addEventListener('change', () => gravarJust(el.dataset.justDoc)));
+        raiz.querySelectorAll('[data-autenticar]').forEach((el) => el.addEventListener('click', async () => {
+          const t = VP.db.pega('termosResp', el.dataset.autenticar);
+          if (!await ui.confirmar(`Autenticar o termo ${esc(t.numero)}, feito à revelia (responsável ausente, sem delegado)? Quem autentica é a autoridade competente.`, { sim: 'Autenticar' })) return;
+          t.assinaturaCelular.autenticadoEm = agora(); t.assinaturaCelular.autenticadoPor = quem();
+          t.historico = (t.historico || []).concat([{ data: agora(), descricao: `Inventário à revelia autenticado por ${quem()}`, usuario: quem() }]);
+          await VP.db.gravar('termosResp', t); ui.aviso('Termo autenticado.'); VP.app.render();
+        }));
         // Esclarecimento = só explicar; recusa = erro ou algo a alterar. Os dois reabrem o inventário no celular com o texto à vista.
         const rotuloDe = (alvo, ref) => {
           if (alvo === 'bem') { const b = VP.db.pega('bens', ref); return b ? `${b.plaqueta} · ${b.descricao}` : 'Bem'; }
@@ -809,6 +873,12 @@
         raiz.querySelector('[data-esclarecer]')?.addEventListener('click', () => devolver('esclarecimento'));
         raiz.querySelector('[data-recusar]')?.addEventListener('click', () => devolver('recusa'));
         raiz.querySelector('[data-aprovar]')?.addEventListener('click', async () => {
+          const semAut = termos.filter((t) => t.assinaturaCelular?.situacao === 'revelia' && !t.assinaturaCelular.autenticadoEm);
+          if (semAut.length) { ui.aviso(`Antes de aprovar, autentique o(s) termo(s) feito(s) à revelia: ${semAut.map((t) => t.numero).join(', ')} (aba Termos e assinaturas).`, 'erro'); return; }
+          const extraviados = r.faltaram.filter((b) => ((inv.justificativas || {})[b.id]?.motivo || 'sem') === 'sem').length;
+          const semDoc = r.faltaram.filter((b) => { const j = (inv.justificativas || {})[b.id]; return j && j.motivo !== 'sem' && !j.documento; });
+          if (semDoc.length) { ui.aviso(`Justificativa sem documento: ${semDoc.map((b) => b.plaqueta).join(', ')}. Informe o documento (aba Faltaram) ou marque "Sem justificativa".`, 'erro'); return; }
+          if (extraviados && !await ui.confirmar(`${extraviados} bem(ns) que faltaram estão sem justificativa e vão ficar marcados como <b>extraviados</b> (abre pendência para apurar). Continuar?`, { titulo: 'Bens sem justificativa', sim: 'Continuar' })) return;
           // Fora da aba Mudanças, todos os bens com mudança contam como marcados
           const caixas = [...raiz.querySelectorAll('[data-aplicar]')];
           const desmarcados = caixas.filter((c) => !c.checked).map((c) => c.dataset.aplicar);
@@ -820,6 +890,31 @@
       }
     };
   };
+
+  // Relatório da comissão (livro, págs. 123–131): números, % de divergência, faltas com justificativa, sobras e o visto da comissão
+  IC.relatorioComissao = (inv) => ui.formulario({
+    titulo: 'Relatório da comissão — ' + inv.numero, largura: 'media', textoSalvar: 'Imprimir',
+    campos: [{ chave: 'parecer', rotulo: 'Conclusão / parecer da comissão', tipo: 'area', valor: inv.parecerComissao || '' }],
+    valores: { parecer: inv.parecerComissao || '' },
+    salvar: async (v) => {
+      inv.parecerComissao = v.parecer || '';
+      await VP.db.gravar('inventarios', inv);
+      const r = IC.resumo(inv), d = IC.divergencia(inv), c = VP.db.pega('comissoes', inv.comissaoId), just = inv.justificativas || {};
+      const pct = (x) => x.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%';
+      const membros = c?.membros ? String(c.membros).split(/\n|;/).map((x) => x.trim()).filter(Boolean) : ['Presidente da comissão', 'Membro', 'Membro'];
+      ui.imprimir(`<h1>Relatório da comissão de inventário</h1>
+        <p>Inventário <b>${esc(inv.numero)}</b> · ${esc(IC.TIPOS[inv.tipo] || 'Anual')} · unidade <b>${esc(VP.nome('unidades', inv.unidadeId))}</b></p>
+        <p>Comissão: ${esc(c ? c.nome : 'não informada')}${c?.ato ? ' · ' + esc(c.ato) : ''} · início ${u.data(dataLocal(inv.abertoEm))}${inv.prazoFim ? ' · prazo ' + u.data(inv.prazoFim) : ''}${inv.enviadoEm ? ' · enviado em ' + u.data(dataLocal(inv.enviadoEm)) : ''}</p>
+        <table class="tabela doc"><tbody><tr><th>Bens cadastrados (previstos)</th><td>${d.previstos}</td></tr><tr><th>Encontrados</th><td>${d.encontrados}</td></tr><tr><th>Faltas (não encontrados)</th><td>${d.faltas}</td></tr><tr><th>Sobras (não cadastrados aqui)</th><td>${d.sobras}</td></tr><tr><th>Sem plaqueta</th><td>${d.semPlaqueta}</td></tr><tr><th>Com mudança (estado, local, responsável)</th><td>${r.mudancas.length}</td></tr>
+          <tr><th>Divergência por sobra: Div(&gt;) = sobras ÷ cadastrados × 100</th><td><b>${pct(d.maior)}</b></td></tr><tr><th>Divergência por falta: Div(&lt;) = faltas ÷ cadastrados × 100</th><td><b>${pct(d.menor)}</b></td></tr></tbody></table>
+        ${r.faltaram.length ? `<h2>Bens não encontrados</h2><table class="tabela doc"><thead><tr><th>Plaqueta</th><th>Bem</th><th>Responsável</th><th>Justificativa</th><th>Documento</th></tr></thead><tbody>${r.faltaram.map((b) => { const j = just[b.id] || {}; return `<tr><td>${esc(b.plaqueta)}</td><td>${esc(b.descricao)}</td><td>${esc(nomeResp(b.responsavelId))}</td><td>${esc(IC.JUSTIFICATIVAS[j.motivo || 'sem'])}</td><td>${esc(j.documento || '')}</td></tr>`; }).join('')}</tbody></table>` : ''}
+        ${r.deFora.length || r.sobras.length ? `<h2>Sobras</h2><table class="tabela doc"><thead><tr><th>Plaqueta</th><th>O que é</th><th>Situação</th></tr></thead><tbody>${r.deFora.map((b) => `<tr><td>${esc(b.plaqueta)}</td><td>${esc(b.descricao)}</td><td>Cadastrado em ${esc(VP.nome('unidades', b.unidadeId))}</td></tr>`).join('')}${r.sobras.map((x) => `<tr><td>${esc(x.plaqueta || 'sem plaqueta')}</td><td>${esc(x.descricao)}</td><td>Sem cadastro</td></tr>`).join('')}</tbody></table>` : ''}
+        <h2>Conclusão</h2><p>${esc(v.parecer || '').replace(/\n/g, '<br>') || '________________________________________'}</p>
+        <div class="assinaturas">${membros.map((m) => `<div><span></span>${esc(m)}</div>`).join('')}</div>`, 'Relatório da comissão de inventário');
+      historico(inv, 'Relatório da comissão impresso');
+      await VP.db.gravar('inventarios', inv);
+    }
+  });
 
   // Aplica o inventário aprovado: só os bens marcados mudam; todos lidos ganham o registro com o número do inventário
   IC.aprovar = async (inv, desmarcados = []) => {
@@ -844,12 +939,16 @@
       const texto = aplicar && lista.length ? lista.map((m) => (m.de ? `${m.rotulo}: ${m.de} → ${m.para}` : `${m.rotulo}: ${m.para}`)).join('; ') : (lista.length ? 'mudanças não aprovadas' : 'sem mudança');
       eventos.push(VP.novoEvento(b.id, 'inventario', { descricao: `Conferido no inventário ${inv.numero} (${texto})`, extra: { inventarioId: inv.id, numero: inv.numero, antes, depois, aplicado: aplicar, observacao: l.observacao || '', lidoEm: l.em, lidoPor: l.por } }));
       b.ultimoInventario = { id: inv.id, numero: inv.numero, data: hoje() };
+      if (b.extraviado && !b.extraviado.resolvido) { b.extraviado.resolvido = { inventarioId: inv.id, numero: inv.numero, data: hoje() }; eventos.push(VP.novoEvento(b.id, 'inventario', { descricao: `Bem extraviado foi achado no inventário ${inv.numero}`, extra: { inventarioId: inv.id, achado: true } })); }
       bens.push(b);
       sucesso.push(`${b.plaqueta}: ${texto}`);
     }
     for (const id of Object.keys(inv.esperados).filter((x) => !inv.leituras[x])) {
-      if (!VP.db.pega('bens', id)) continue;
-      eventos.push(VP.novoEvento(id, 'inventario', { descricao: `Não localizado no inventário ${inv.numero}`, extra: { inventarioId: inv.id, numero: inv.numero, naoLocalizado: true } }));
+      const b = VP.db.pega('bens', id); if (!b) continue;
+      const j = (inv.justificativas || {})[id];
+      const extraviado = !j || j.motivo === 'sem';
+      eventos.push(VP.novoEvento(id, 'inventario', { descricao: `Não localizado no inventário ${inv.numero}${extraviado ? ' — sem justificativa: extraviado (apurar)' : ` — justificado: ${IC.JUSTIFICATIVAS[j.motivo]}${j.documento ? ' (' + j.documento + ')' : ''}`}`, extra: { inventarioId: inv.id, numero: inv.numero, naoLocalizado: true, justificativa: j || null, extraviado } }));
+      if (extraviado) { b.extraviado = { inventarioId: inv.id, numero: inv.numero, data: hoje() }; bens.push(b); falhas.push({ item: `${b.plaqueta} · ${b.descricao}`, motivo: 'Não localizado e sem justificativa: marcado como extraviado (apurar)' }); }
     }
     // Termos: o assinado na tela vale como assinado; a recusa com testemunha fica registrada; sem assinatura segue o prazo normal
     const termos = IC.termos(inv);
@@ -859,6 +958,8 @@
     for (const t of termos) {
       const a = t.assinaturaCelular;
       if (a?.situacao === 'assinado') { t.situacao = 'assinado'; t.assinado = { data: dataLocal(a.em), eletronico: true }; }
+      else if (a?.situacao === 'delegado') { t.situacao = 'assinado'; t.assinado = { data: dataLocal(a.em), eletronico: true, delegado: a.delegado, delegacao: a.delegacao || '' }; }
+      else if (a?.situacao === 'revelia') { t.situacao = 'assinado'; t.assinado = { data: dataLocal(a.em), eletronico: true, revelia: true, autenticadoPor: a.autenticadoPor, autenticadoEm: a.autenticadoEm }; }
       else if (a?.situacao === 'recusado') { t.situacao = 'recusado'; t.recusadoEm = dataLocal(a.em); }
       else { t.situacao = 'aguardando'; t.prazo = u.somaDias(hoje(), VP.termos?.prazoDias() || 15); }
       t.historico = (t.historico || []).concat([{ data: agora(), descricao: `Inventário ${inv.numero} aprovado`, usuario: quem() }]);
@@ -884,8 +985,9 @@
   IC.secaoFicha = (b) => {
     const abertos = IC.lista().filter((i) => i.situacao !== 'encerrado' && i.leituras[b.id]);
     const anteriores = VP.eventosDoBem(b.id).filter((e) => e.tipo === 'inventario').sort((a, c) => String(c.criadoEm).localeCompare(String(a.criadoEm)));
-    if (!abertos.length && !anteriores.length) return '';
+    if (!abertos.length && !anteriores.length && !b.extraviado) return '';
     return `<section class="cartao secao" id="sec-inventario"><header><h3>Inventário</h3></header>
+      ${b.extraviado && !b.extraviado.resolvido ? `<p class="aviso-inline"><b>Extraviado:</b> não foi encontrado no inventário ${esc(b.extraviado.numero)} (${u.data(b.extraviado.data)}) e ficou sem justificativa. Apure (sindicância ou termo circunstanciado). Se for achado, leia a plaqueta num novo inventário.</p>` : ''}
       ${abertos.map((i) => { const l = i.leituras[b.id]; return `<div class="inv-ficha"><p><b>${esc(i.nome)}</b> <span class="selo-atencao">${esc(IC.situacaoTexto(i))}</span></p>
         <dl class="dados"><dt>Lido em</dt><dd>${esc(u.data(dataLocal(l.em)))} ${esc(horaLocal(l.em))}, por ${esc(l.por || '')} (${l.origem === 'camera' ? 'câmera' : 'digitado'})</dd>
         <dt>Estado</dt><dd>${esc(nomeEstado(l.estado))} (no cadastro: ${esc(nomeEstado(b.estado))})</dd>

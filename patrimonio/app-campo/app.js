@@ -663,7 +663,7 @@ async function render() {
   const nome = Telas[telaAtual()] ? telaAtual() : 'inicio';
   const t = await Telas[nome]();
   $('#titulo').textContent = t.titulo;
-  $('#voltar').classList.toggle('oculto', nome === 'inicio');
+  $('#voltar').classList.remove('oculto'); // 28/10/2026: este app foi aposentado; voltar leva sempre ao Início rápido da Gestão
   $('#tela').innerHTML = t.html;
   window.scrollTo(0, 0);
   if (t.ligar) await t.ligar();
@@ -673,7 +673,7 @@ function atualizarConexao() {
   $('#conexao').textContent = on ? 'Com internet' : 'Sem internet';
 }
 
-$('#voltar').addEventListener('click', () => { location.hash = 'inicio'; });
+$('#voltar').addEventListener('click', () => { location.href = '../gestao/#campo'; });
 // Sair: volta para a tela de login. Os registros continuam guardados no aparelho.
 $('#sair').addEventListener('click', async () => {
   if (window.Envio?.ativo) await window.Envio.sair();

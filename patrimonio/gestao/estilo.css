@@ -630,3 +630,12 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 #area-impressao .doc-itens .doc-num { width: 28px; color: #555; }
 #area-impressao .campo-vazio { color: #888; }
 #area-impressao .doc-bem { color: #333; margin-top: -4px; }
+
+/* Laudo técnico para baixa (28/10/2026): um laudo por página */
+#area-impressao .laudo-pagina { break-before: page; page-break-before: always; }
+#area-impressao .doc-laudos h2 { font-size: 11pt; margin: 10px 0 4px; }
+#area-impressao .laudo-parecer { border: 1px solid #000; padding: 8px; min-height: 60px; }
+#area-impressao .laudo-assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; text-align: center; font-size: 10pt; }
+#area-impressao .laudo-assinaturas span { display: block; border-top: 1px solid #000; margin-bottom: 4px; }
+#area-impressao .laudo-aprovo { margin-top: 40px; font-size: 13pt; }
+#area-impressao .laudo-linha { display: inline-block; width: 220px; border-bottom: 1px solid #000; }

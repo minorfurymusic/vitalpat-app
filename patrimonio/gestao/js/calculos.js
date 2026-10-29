@@ -74,6 +74,53 @@
     };
   };
 
+  // ------------------------------------------------------------- natureza de despesa (28/10/2026)
+  // Classificação orçamentária da despesa: categoria.grupo.modalidade.elemento[.subelemento]. Até o elemento é nacional
+  // (Portaria Interministerial STN/SOF 163/2001 e MCASP) [A conferir no texto oficial]; o subelemento muda de um ente para outro.
+  // Vem do empenho / ordem de compra (o sistema contábil emite); a nota fiscal não traz. O VitalPat só guarda e confere.
+  VP.ND = {
+    LISTA: [
+      ['3.3.90.30', 'Material de consumo'], ['3.3.90.36', 'Outros serviços de terceiros — pessoa física'], ['3.3.90.39', 'Outros serviços de terceiros — pessoa jurídica'],
+      ['3.3.90.40', 'Serviços de tecnologia da informação e comunicação — pessoa jurídica'], ['4.4.90.36', 'Outros serviços de terceiros — pessoa física (investimento)'],
+      ['4.4.90.39', 'Outros serviços de terceiros — pessoa jurídica (investimento)'], ['4.4.90.40', 'Serviços de tecnologia da informação e comunicação — pessoa jurídica (investimento)'],
+      ['4.4.90.51', 'Obras e instalações'], ['4.4.90.52', 'Equipamentos e material permanente'], ['4.4.90.61', 'Aquisição de imóveis'],
+      ['4.5.90.61', 'Aquisição de imóveis (já em uso: inversão financeira)']
+    ],
+    // aceita "4.4.90.52", "4.4.90.52.42", "44905242" e o código longo da ordem de compra do IPM ("3449052420000000000" = 3 + 4.4.90.52.42) [D: formato do IPM deduzido do modelo]
+    normalizar: (txt) => {
+      const t = String(txt || '').trim();
+      let m = t.match(/\b([34])\.(\d)\.(\d{2})\.(\d{2})(?:\.(\d{2}))?/);
+      if (m) return [m[1], m[2], m[3], m[4], m[5] && m[5] !== '00' ? m[5] : ''].filter(Boolean).join('.');
+      m = t.match(/^\s*(\d{7,})/);
+      if (!m) return '';
+      let d = m[1];
+      if (d.length > 8 && d[0] === '3' && /[34]/.test(d[1])) d = d.slice(1);
+      if (!/^[34]/.test(d) || d.length < 6) return '';
+      const sub = d.slice(6, 8);
+      return [d[0], d[1], d.slice(2, 4), d.slice(4, 6), sub && sub !== '00' && sub.length === 2 ? sub : ''].filter(Boolean).join('.');
+    },
+    valido: (c) => /^[34]\.\d\.\d{2}\.\d{2}(\.\d{2})?$/.test(String(c || '')),
+    doBem: (b) => VP.ND.normalizar(b.naturezaDespesa) || VP.ND.normalizar(b.origem?.orcamento?.elemento) || '',
+    elemento: (c) => String(c || '').split('.').slice(0, 4).join('.'),
+    nome: (c) => (VP.ND.LISTA.find(([k]) => k === VP.ND.elemento(c)) || [, ''])[1],
+    texto: (c) => (c ? `${c}${VP.ND.nome(c) ? ' — ' + VP.ND.nome(c) : ''}` : ''),
+    // sugestão pelo tipo do bem (a pessoa confirma)
+    sugerida: (b) => {
+      if (b.tipo === 'imovel') return /constru|obra/i.test(b.situacaoAquisicao || '') ? '4.4.90.51' : '4.4.90.61';
+      if (b.tipo === 'infraestrutura') return '4.4.90.51';
+      if (b.tipo === 'intangivel') return '4.4.90.40';
+      return '4.4.90.52';
+    },
+    // bem permanente com natureza de consumo (3.3.90.30) ou de custeio: erro comum de empenho
+    incoerencia: (b) => {
+      const c = VP.ND.doBem(b); if (!c) return '';
+      if (b.itemControle || b.controle) return '';
+      if (c.startsWith('3.')) return `Bem permanente com natureza de despesa corrente (${c}${VP.ND.nome(c) ? ', ' + VP.ND.nome(c).toLowerCase() : ''}). O esperado para este tipo é ${VP.ND.sugerida(b)} (${VP.ND.nome(VP.ND.sugerida(b)).toLowerCase()}). Confira o empenho.`;
+      if (b.tipo === 'imovel' && !['4.4.90.61', '4.5.90.61', '4.4.90.51'].includes(VP.ND.elemento(c))) return `Imóvel com natureza ${c}: o esperado é 4.4.90.61 (aquisição), 4.5.90.61 (imóvel já em uso) ou 4.4.90.51 (obra).`;
+      return '';
+    }
+  };
+
   VP.naoDeprecia = (bem) => {
     const p = bem.depreciacao || {};
     if (!p.automatica) return true;
@@ -277,6 +324,10 @@
     const recsAbertas = VP.db.lista('recomendacoesAuditoria').filter((r) => ['aberta', 'andamento'].includes(r.situacao));
     add('aud-recs-vencidas', 'atencao', 'Auditoria: recomendações com prazo vencido', recsAbertas.filter((r) => r.prazo && r.prazo < hoje).length, '#auditoria/recomendacoes?vencidas=1', 'Registre o andamento ou peça novo prazo (Auditoria → Recomendações).');
     // Inventário pelo celular (26/10/2026): enviado e esperando quem aprova
+    // Livro, págs. 123–131 (28/10/2026): inventário com prazo vencido e bens extraviados (sem justificativa) para apurar
+    add('natureza-incoerente', 'info', 'Bens com natureza de despesa que não combina com o tipo (ex.: permanente como consumo)', VP.db.lista('bens').filter((b) => b.status !== 'baixado' && VP.ND.incoerencia(b)).length, '#bens', 'Abra o bem: o aviso aparece em Valores e contas. Confira o empenho com o setor contábil.');
+    add('inv-celular-prazo', 'atencao', 'Inventários pelo celular com o prazo vencido', VP.db.lista('inventarios').filter((i) => i.origem === 'celular' && i.situacao === 'aberto' && i.prazoFim && i.prazoFim < hoje).length, '#inventario', 'Termine ou prorrogue o prazo (Análise → Prorrogar prazo).');
+    add('bens-extraviados', 'critico', 'Bens extraviados (não achados no inventário, sem justificativa): apurar', VP.db.lista('bens').filter((b) => b.extraviado && !b.extraviado.resolvido && b.status !== 'baixado').length, '#inventario', 'Abra sindicância ou termo circunstanciado; se o bem for achado, leia a plaqueta num novo inventário.');
     add('inv-celular-analise', 'atencao', 'Inventários pelo celular aguardando análise', VP.db.lista('inventarios').filter((i) => i.origem === 'celular' && i.situacao === 'em-analise').length, '#inventario', 'Abra Inventário → Inventários pelo celular → Analisar. Nada muda no cadastro antes da aprovação.');
     add('inv-celular-devolvido', 'atencao', 'Inventários pelo celular com esclarecimento pedido ou recusados (aguardando quem fez)', VP.db.lista('inventarios').filter((i) => i.origem === 'celular' && i.situacao === 'aberto' && i.pendenteResposta).length, '#inventario', 'Quem fez o inventário abre pelo celular (Inventariar), corrige se preciso e explica o que fez ao enviar de novo.');
     add('aud-ocor-sem-doc', 'critico', 'Ocorrências de segurança sem boletim ou laudo', VP.db.lista('ocorrenciasSeguranca').filter((o) => !o.documento).length, '#auditoria/ocorrencias', 'Furto, dano ou sinistro precisa do boletim de ocorrência ou do laudo.');

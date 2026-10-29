@@ -15,7 +15,7 @@
   TR.lista = (incl = false) => VP.db.lista('termosResp', incl);
   TR.prazoDias = () => Number(VP.config().prazoTermoDias) || 15;
   TR.vencido = (t) => t.situacao === 'aguardando' && t.prazo < hoje();
-  TR.situacaoTexto = (t) => (t.situacao === 'assinado' ? (t.assinado?.eletronico ? 'Assinado na tela do celular' : 'Assinado') : t.situacao === 'recusado' ? 'Recusou assinar (com testemunha)' : t.situacao === 'em-analise' ? 'Inventário em análise' : t.situacao === 'cancelado' ? 'Cancelado' : TR.vencido(t) ? 'Vencido' : 'Aguardando assinatura');
+  TR.situacaoTexto = (t) => (t.situacao === 'assinado' ? (t.assinado?.revelia ? 'À revelia (autenticado)' : t.assinado?.delegado ? 'Assinado pelo delegado' : t.assinado?.eletronico ? 'Assinado na tela do celular' : 'Assinado') : t.situacao === 'recusado' ? 'Recusou assinar (com testemunha)' : t.situacao === 'em-analise' ? 'Inventário em análise' : t.situacao === 'cancelado' ? 'Cancelado' : TR.vencido(t) ? 'Vencido' : 'Aguardando assinatura');
   TR.doBem = (bemId) => TR.lista().filter((t) => t.situacao === 'aguardando' && (t.bens || []).includes(bemId));
   TR.proximoNumero = () => `${TR.lista(true).filter((t) => String(t.numero).endsWith('/' + hoje().slice(0, 4))).length + 1}/${hoje().slice(0, 4)}`;
 

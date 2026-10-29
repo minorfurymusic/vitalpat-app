@@ -99,6 +99,7 @@
       { chave: 'status', titulo: 'Situação', html: etiquetaStatus, valor: (b) => L.status[b.status] },
       { chave: 'estado', titulo: 'Estado', valor: (b) => estadoTxt(b.estado), ordenar: (b) => Number(b.estado) },
       { chave: 'conta', titulo: 'Conta', valor: (b) => VP.nome('contas', b.contaId), oculta: true },
+      { chave: 'natureza', titulo: 'Natureza de despesa', valor: (b) => VP.ND.doBem(b), oculta: true },
       { chave: 'caracteristicas', titulo: 'Características', valor: (b) => [b.detalhes?.marca, b.detalhes?.modelo, b.detalhes?.cor, b.veiculo?.placa].filter(Boolean).join(' · '), oculta: true },
       { chave: 'score', titulo: 'Score', num: true, valor: (b) => VP.score(b)?.valor ?? '', oculta: true }
     ];
@@ -167,6 +168,7 @@
         <button class="botao pequeno" data-lote="desuso">Desuso</button>
         <button class="botao pequeno" data-lote="retorno">Volta ao uso</button>
         <button class="botao pequeno" data-lote="inservivel">Inservível</button>
+        <button class="botao pequeno" data-lote="laudo">Laudo para baixa</button>
         <button class="botao pequeno" data-lote="baixa">Baixa</button>
         <button class="botao pequeno" data-lote="loteBaixa">Incluir em lote de baixa</button>
         <button class="botao pequeno" data-lote="reavaliar">Reavaliar</button>
@@ -197,6 +199,7 @@
       baixa: () => A.baixa(bens, depois), loteBaixa: () => VP.baixaLote.escolherLote(bens, depois), reavaliar: () => { VP.estado.reavaliarIds = bens.map((b) => b.id); VP.app.ir('#financeiro/reavaliacao'); },
       complementares: () => A.complementares(bens, depois), seguro: () => A.seguroGarantia(bens, depois), vistoria: () => A.vistoria(bens, depois),
       etiquetas: () => { VP.estado.etiquetasIds = bens.map((b) => b.id); VP.app.ir('#relatorio/etiquetas'); },
+      laudo: () => VP.laudosBaixa.abrir(bens, depois),
       termo: () => VP.documentos.termoResponsabilidade(bens), recebimento: () => VP.termos.recebimento(bens, depois), excluir: () => A.excluir(bens, depois)
     };
     mapa[acao]();
@@ -264,6 +267,7 @@
         <button class="botao" data-acao="recebimento">Recebimento</button>
         <button class="botao" data-acao="unir" title="O mesmo bem tem dois cadastros (duas plaquetas)">Unir cadastros</button>
         ${VP.imoveis && VP.imoveis.ehImovel(b) && b.tipo === 'imovel' ? '<button class="botao" data-acao="baixaParcial" title="Perda de área ou demolição de parte">Baixa parcial</button> <button class="botao" data-acao="desmembrar" title="Dividir em dois ou mais imóveis">Dividir imóvel</button> <button class="botao" data-acao="remembrar" title="Juntar com outros imóveis num só">Juntar imóveis</button>' : ''}
+        <button class="botao" data-acao="laudo" title="Laudo técnico antes da baixa">Laudo para baixa</button>
         <button class="botao" data-acao="baixa">Baixa</button>`}
         <button class="botao" data-acao="imprimir">Imprimir ficha</button>
         <button class="botao" data-acao="etiqueta">Etiqueta</button>
@@ -282,7 +286,7 @@
         ${b.tipo === 'imovel' || b.imovel ? cartao('Imóvel: registro e uso', 'imovel', [['Matrícula', b.imovel?.matricula], ['Ligações de água e luz', b.imovel?.ligacoes], ['Cartório', b.imovel?.cartorio], ['Situação do registro', b.imovel?.situacaoRegistro], ['O que impede o registro', b.imovel?.motivoPendencia], ['Classificação de uso', b.imovel?.uso], ['Afetado', b.imovel?.afetado == null ? '' : b.imovel.afetado ? 'Sim' : 'Não'], ['Inscrição imobiliária (IPTU)', b.imovel?.inscricaoIptu], ...linhasLivroImovel(b), ['Escritura (texto antigo)', b.imovel?.escritura], ['Área do terreno', b.imovel?.areaTerreno ? u.inteiro(b.imovel.areaTerreno) + ' m²' : ''], ['Área construída', b.imovel?.areaConstruida ? u.inteiro(b.imovel.areaConstruida) + ' m²' : ''], ['Área coberta', b.imovel?.areaCoberta ? Number(b.imovel.areaCoberta).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' m²' : ''], ['Dimensões (frente × fundos; laterais)', dimensoes(b.imovel)], ['Valor do terreno', b.imovel?.valorTerreno ? u.moeda(b.imovel.valorTerreno) : ''], ['Forma de ingresso', b.imovel?.origemArea], ['Proprietário na matrícula', b.imovel?.proprietarioMatricula], ['Último registro na matrícula', b.imovel?.ultimoRegistroMatricula ? u.data(b.imovel.ultimoRegistroMatricula) : '']], (b.conferenciaImportacao?.motivo ? `<p class="ajuda">Origem: ${esc(b.conferenciaImportacao.motivo)}</p>` : '')) + (VP.imoveis ? VP.imoveis.secoesFicha(b) : '') : ''}
         ${b.tipo === 'veiculo' ? cartao('Veículo', 'veiculo', [['Placa', b.veiculo?.placa], ['RENAVAM', b.veiculo?.renavam], ['Chassi', b.veiculo?.chassi], ['Combustível', b.veiculo?.combustivel], ['Ano/modelo', b.veiculo?.anoModelo], ['Tanque (litros)', b.veiculo?.capacidadeTanque], ['Abastecimentos registrados', abast.length ? `${abast.length} · ${u.inteiro(litros)} L · ${u.moeda(abast.reduce((t, e) => t + e.valor, 0))}` : '']]) : ''}
         ${cartao('Seguro e garantia', 'seguro', [['Seguradora', b.seguro?.seguradoraId ? VP.nome('seguradoras', b.seguro.seguradoraId) : ''], ['Corretora', b.seguro?.corretoraId ? VP.nome('seguradoras', b.seguro.corretoraId) : ''], ['Apólice', b.seguro?.apolice], ['Vigência', b.seguro?.inicio ? `${u.data(b.seguro.inicio)} a ${u.data(b.seguro.termino)}` : ''], ['Valor do seguro', b.seguro?.valor ? u.moeda(b.seguro.valor) : ''], ['Franquia', b.seguro?.franquia ? u.moeda(b.seguro.franquia) : ''], ['Garantia', b.garantia?.termino ? `${VP.nome('tiposGarantia', b.garantia.tipoId)} até ${u.data(b.garantia.termino)}` : ''], ['Fornecedor da garantia', b.garantia?.fornecedorId ? VP.nome('fornecedores', b.garantia.fornecedorId) : '']])}
-        ${cartao('Valores e contas', 'valores', [['Conta contábil', VP.nome('contas', b.contaId)], ['Valor base (aquisição, reavaliação e melhorias)', u.moeda(s.base)], ['Melhorias somadas', u.moeda(s.agregado)], ['Valor residual', u.moeda(s.residual)], ['Depreciação acumulada', u.moeda(s.acumulada)], ['Valor contábil (líquido)', u.moeda(s.liquido)]])}
+        ${cartao('Valores e contas', 'valores', [['Conta contábil', VP.nome('contas', b.contaId)], ['Natureza de despesa', VP.ND.doBem(b) ? VP.ND.texto(VP.ND.doBem(b)) + (b.naturezaDespesa ? '' : ' (lida da ordem de compra)') : `não informada · sugestão: ${VP.ND.texto(VP.ND.sugerida(b))}`], ['Valor base (aquisição, reavaliação e melhorias)', u.moeda(s.base)], ['Melhorias somadas', u.moeda(s.agregado)], ['Valor residual', u.moeda(s.residual)], ['Depreciação acumulada', u.moeda(s.acumulada)], ['Valor contábil (líquido)', u.moeda(s.liquido)]], VP.ND.incoerencia(b) ? `<p class="aviso-inline"><b>Natureza de despesa:</b> ${esc(VP.ND.incoerencia(b))}</p>` : '')}
         ${cartao('Depreciação', 'depreciacao', VP.naoDeprecia(b) ? [['Situação', b.depreciacao?.automatica === false ? 'Não deprecia automaticamente' : 'Classificação não deprecia (ex.: terreno)']] : [['Depreciar automaticamente', b.depreciacao?.automatica ? 'Sim' : 'Não'], ['Método', L.metodos[b.depreciacao?.metodo] || ''], ['Início', s.inicio ? u.mesExtenso(s.inicio) : ''], ['Vida útil', s.vidaUtilMeses ? `${s.vidaUtilMeses} meses` : ''], ['Residual', b.depreciacao?.residualTipo === 'percentual' ? `${b.depreciacao.residual}% (${u.moeda(s.residual)})` : u.moeda(s.residual)], ['Valor a depreciar', u.moeda(s.depreciavel)], ['Taxa mensal / anual', `${u.moeda(tx.mensal)} / ${u.moeda(tx.anual)} (${u.pct(tx.percentualAnual)} ao ano)`], inicial ? ['Acumulado até a implantação do sistema', u.moeda(inicial)] : null, ['Acumulado manual', u.moeda(manual)], ['Acumulado automático (fechamentos)', u.moeda(automatica)], ['Acumulado total', u.moeda(inicial + manual + automatica)], ['Conta de débito', VP.nome('contas', b.depreciacao?.contaDebito)], ['Conta de crédito', VP.nome('contas', b.depreciacao?.contaCredito)]], proj.length ? `<h4>Valor ao longo da vida útil</h4>${G.linha(proj, { largura: 330, altura: 190, formato: u.moeda, formatoEixo: u.moedaCurta, rotuloX: u.mesNome, marcaX: VP.Plataforma.hoje().slice(0, 7), titulo: 'Valor do bem ao longo da vida útil' })}` : '')}
         <section class="cartao secao"><header><h3>Despesas e manutenções</h3></header>
           ${custos.length ? `<div class="resumo-linha">${G.numero('Últimos 12 meses', u.moeda(custos.filter((e) => e.data >= umAno).reduce((t, e) => t + (e.valor || 0), 0)))}${G.numero('Total registrado', u.moeda(custos.reduce((t, e) => t + (e.valor || 0), 0)))}</div>` : '<p class="vazio">Nenhuma despesa registrada.</p>'}
@@ -479,7 +483,8 @@
       { chave: 'veiculo.anoModelo', rotulo: 'Ano/modelo', largura: 'meia' }, { chave: 'veiculo.capacidadeTanque', rotulo: 'Tanque (litros)', tipo: 'numero', largura: 'meia' }] },
     seguro: { titulo: 'Seguro e garantia', campos: camposSeguro() },
     valores: { titulo: 'Valores e contas', aviso: 'O valor do bem só muda por reavaliação, melhoria ou baixa (para ficar registrado). Aqui muda só a conta.', campos: [
-      { chave: 'contaId', rotulo: 'Conta contábil', tipo: 'select', opcoes: opc('contas', (c) => c.tipo === 'ativo'), obrigatorio: VP.config().obrigaContas }] },
+      { chave: 'contaId', rotulo: 'Conta contábil', tipo: 'select', opcoes: opc('contas', (c) => c.tipo === 'ativo'), obrigatorio: VP.config().obrigaContas },
+      { chave: 'naturezaDespesa', rotulo: 'Natureza de despesa (do empenho)', sugestoes: VP.ND.LISTA.map(([k]) => k), placeholder: 'Ex.: 4.4.90.52 ou 4.4.90.52.42', ajuda: 'Categoria.grupo.modalidade.elemento[.subelemento]. Vem do empenho ou da ordem de compra. Bem móvel: 4.4.90.52; imóvel: 4.4.90.61; obra: 4.4.90.51; material de consumo (não é bem): 3.3.90.30.' }] },
     depreciacao: { titulo: 'Depreciação', aviso: 'Mudar vida útil ou residual vale daqui para frente (não recalcula o passado). Exige justificativa.', campos: [
       { chave: 'depreciacao.automatica', rotulo: 'Depreciar automaticamente no fechamento do mês', tipo: 'bool' },
       { chave: 'depreciacao.metodo', rotulo: 'Método', tipo: 'select', opcoes: Object.entries(L.metodos), vazio: false },

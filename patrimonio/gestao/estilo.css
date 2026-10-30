@@ -659,3 +659,18 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 /* Datas do registro e o que mudou em cada alteração (pendência 07, 29/10/2026) */
 .registro-datas { margin: 0 0 10px; }
 .ev-mudancas { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--texto-2); }
+/* Ficha do bem: 6 ações à vista e o resto em "Mais ações" (proposta B-07 aprovada em 30/10/2026) */
+.mais-acoes { position: relative; display: inline-block; }
+.mais-acoes > summary { list-style: none; }
+.mais-acoes > summary::-webkit-details-marker { display: none; }
+.mais-acoes > summary::after { content: ' ▾'; }
+.mais-acoes[open] > summary::after { content: ' ▴'; }
+.mais-acoes-lista { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; display: flex; flex-direction: column; gap: 6px; min-width: 220px; padding: 8px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: 0 8px 24px rgba(0, 0, 0, .15); }
+.mais-acoes-lista .botao { justify-content: flex-start; width: 100%; }
+@media (max-width: 760px) { .mais-acoes { display: block; width: 100%; } .mais-acoes > summary { width: 100%; } .mais-acoes-lista { position: static; margin-top: 6px; box-shadow: none; } }
+
+.componentes { margin-top: 12px; }
+.componentes h4 { margin: 0 0 4px; }
+.nota-explicativa p { margin: 0 0 10px; line-height: 1.55; }
+.nota-explicativa h3 { margin-top: 0; }
+.nota-explicativa { max-width: 920px; margin-bottom: 14px; }

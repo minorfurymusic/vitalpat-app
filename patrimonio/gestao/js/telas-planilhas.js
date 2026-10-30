@@ -643,7 +643,7 @@
         ${VP.importaCadastros ? `<section class="cartao" id="exp-cadastros"><h3>Planilha Unificada (todos os cadastros, uma aba para cada)</h3>
           <p class="ajuda">Unidades (com tipo, responsável, entidade e endereço), entidades, contas, responsáveis, fornecedores, motivos, comissões, seguradoras, tipos de garantia, classificações, produtos, vida útil dos itens, decisões guardadas e compras. As colunas são as mesmas da importação e da tela Cadastros: dá para corrigir no Excel e importar de volta (aqui ou em Cadastros → Importar planilha unificada), ou usar como modelo para os dados da prefeitura.</p>
           <p><button class="botao primario" data-exp-cadastros>Baixar Planilha Unificada</button></p></section>` : ''}
-        <section class="cartao"><h3>Outras listas</h3><p class="ajuda">Cada lista abaixo tem o botão <b>Baixar planilha</b> na própria tela (Excel, CSV ou JSON, com escolha das colunas). Se marcar linhas na lista, só elas saem.</p>
+        <section class="cartao"><h3>Outras listas</h3><p class="ajuda">Cada lista abaixo tem o botão <b>Baixar planilha</b> na própria tela (Excel, planilha simples ou arquivo para outros sistemas, com escolha das colunas). Se marcar linhas na lista, só elas saem.</p>
           <div class="grade-links">${P.OUTRAS.map(([g, l]) => `<div><h4>${esc(g)}</h4><ul class="lista-simples">${l.map(([h, n]) => `<li><a href="${h}">${esc(n)}</a></li>`).join('')}</ul></div>`).join('')}</div>
         </section>`,
       ligar() {

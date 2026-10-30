@@ -88,6 +88,47 @@
       };
     }
   };
+  // Nota explicativa da política de depreciação, amortização, exaustão e reavaliação (proposta B-03 aprovada em 30/10/2026).
+  // Texto montado sozinho com o que está cadastrado; é sugestão para a contabilidade conferir e copiar nas notas do balanço.
+  R.notaExplicativa = {
+    grupo: 'Visão geral', titulo: 'Nota explicativa: depreciação e reavaliação', descricao: 'Texto pronto da política de depreciação, amortização, exaustão e reavaliação, montado com as classificações e os bens, para as notas do balanço.',
+    filtros: ['entidadeId', 'ate'], padrao: () => ({ ate: hoje() }),
+    gerar(f) {
+      const bens = bensDoFiltro(f).filter((b) => (b.dataIncorporacao || '') <= f.ate);
+      if (!bens.length) return { vazio: 'Nenhum bem até esta data.' };
+      const cfg = VP.config();
+      const metodo = (b) => (VP.naoDeprecia(b) ? 'nao' : b.depreciacao?.metodo || 'linear');
+      const contaM = (m) => bens.filter((b) => metodo(b) === m).length;
+      const usados = new Set(bens.map((b) => b.classificacaoId));
+      const cls = VP.db.lista('classificacoes').filter((c) => usados.has(c.id)).map((c) => {
+        const d = VP.dadosDaClassificacao(c.id); const bs = bens.filter((b) => b.classificacaoId === c.id);
+        const reav = bs.flatMap((b) => VP.eventosDoBem(b.id).filter((e) => e.tipo === 'reavaliacao' && e.data <= f.ate).map((e) => e.data)).sort().pop();
+        return { id: c.id, nome: VP.nome('classificacoes', c.id), qtd: bs.length, vida: d.naoDeprecia ? 'não deprecia' : d.vidaUtilMeses ? `${d.vidaUtilMeses} meses (${String(Math.round(d.vidaUtilMeses / 12 * 10) / 10).replace('.', ',')} anos)` : '—', residual: d.naoDeprecia ? '—' : d.residualPct != null ? `${String(d.residualPct).replace('.', ',')}%` : '—', siafi: d.linhaSiafi || '', receita: d.linhaReceita || '', ultimaReav: reav ? u.data(reav) : '' };
+      });
+      const tot = bens.reduce((a, b) => { const s = VP.saldo(b, f.ate); a.base += s.base; a.acum += s.acumulada; a.liq += s.liquido; return a; }, { base: 0, acum: 0, liq: 0 });
+      const nRec = bens.filter((b) => b.depreciacao?.tabela === 'receita').length;
+      const nComp = bens.filter((b) => (b.componentes || []).some((c) => !c.removido)).length;
+      const nIntSem = bens.filter((b) => b.tipo === 'intangivel' && VP.naoDeprecia(b)).length;
+      const ent = f.entidadeId ? VP.nome('entidades', f.entidadeId) : 'o município (prefeitura e fundos)';
+      const p = (t) => `<p>${t}</p>`;
+      const texto = [
+        `<h3>Nota explicativa: política de depreciação, amortização, exaustão e reavaliação do ativo imobilizado e intangível</h3>`,
+        p(`Referência: ${esc(ent)}, posição em ${u.data(f.ate)}. ${u.inteiro(bens.length)} bens; valor bruto ${u.moeda(tot.base)}, depreciação, amortização e exaustão acumuladas ${u.moeda(tot.acum)} e valor líquido ${u.moeda(tot.liq)}.`),
+        p(`<b>Método.</b> A depreciação é calculada e lançada <b>mensalmente</b>, a partir do mês seguinte à incorporação, pelo método das <b>cotas constantes (linear)</b>${contaM('somaDigitos') ? `; ${contaM('somaDigitos')} bem(ns) usam o método da soma dos dígitos` : ''}${contaM('unidades') ? `; ${contaM('unidades')} bem(ns), o de unidades produzidas` : ''}${contaM('exaustao') ? `; ${contaM('exaustao')} bem(ns) sofrem exaustão conforme a quantidade retirada em relação à reserva estimada` : ''}. O bem parado ou em desuso continua depreciando.`),
+        p(`<b>Vida útil e valor residual.</b> São definidos por classificação de bens (quadro abaixo), com referência na tabela de vida útil e valor residual adotada pelo município [conferir com o decreto municipal].${nRec ? ` Para ${u.inteiro(nRec)} bem(ns) com valor residual informado como zero, usa-se a vida útil da tabela da Receita Federal e o residual igual à taxa anual da linha correspondente.` : ''} Mudanças de vida útil ou de residual valem daqui para frente e ficam registradas com justificativa.`),
+        p(`<b>Bens que não depreciam.</b> Terrenos e demais classificações marcadas como "não deprecia"${nIntSem ? `; ${u.inteiro(nIntSem)} intangível(is) sem prazo definido (vida útil indefinida) não são amortizados` : ''}.`),
+        nComp ? p(`<b>Componentes.</b> ${u.inteiro(nComp)} bem(ns) têm componentes significativos depreciados separadamente, cada um pela sua vida útil (NBC TSP 37).`) : '',
+        p(`<b>Reavaliação.</b> Os bens são reavaliados por comissão ou por profissionais habilitados, com laudo, em ciclos de até ${cfg.reavaliacaoAnos} anos; a reavaliação de uma classe abrange a classe inteira. O valor anterior e o novo ficam registrados no histórico de cada bem.`),
+        p(`<b>Bens de pequeno valor.</b> Itens de até ${u.moeda(cfg.limiteControle)} e vida útil de até ${cfg.limiteControleMeses} meses são controlados na relação carga, fora do balancete.`),
+        '<p class="ajuda">Texto sugerido pelo sistema com os dados cadastrados. A contabilidade confere e ajusta antes de usar nas notas explicativas do balanço [normas: NBC TSP 07/37 e MCASP — a conferir no texto oficial].</p>'
+      ].join('');
+      return {
+        resumo: [G.numero('Bens', u.inteiro(bens.length)), G.numero('Valor bruto', u.moedaCurta(tot.base)), G.numero('Acumulada', u.moedaCurta(tot.acum)), G.numero('Valor líquido', u.moedaCurta(tot.liq))],
+        texto: `<section class="cartao nota-explicativa">${texto}</section>`,
+        tabela: { linhas: cls, colunas: [{ chave: 'nome', titulo: 'Classificação' }, { chave: 'qtd', titulo: 'Bens', num: true, soma: true }, { chave: 'vida', titulo: 'Vida útil' }, { chave: 'residual', titulo: 'Residual' }, { chave: 'siafi', titulo: 'Linha SIAFI' }, { chave: 'receita', titulo: 'Linha Receita' }, { chave: 'ultimaReav', titulo: 'Última reavaliação' }] }
+      };
+    }
+  };
   R.resumo = {
     grupo: 'Visão geral', titulo: 'Resumo patrimonial', descricao: 'Quanto há em cada grupo: quantidade, valor de aquisição, depreciação e valor líquido.',
     filtros: ['entidadeId', 'unidadeId', 'contaId', 'tipo', 'cidade', 'bairro', 'logradouro'],
@@ -378,6 +419,7 @@
           <div class="relatorio-filtros-texto">${esc(textoFiltros(defs, f))}</div>
           <div class="resumo-linha">${(out.resumo || []).join('')}</div>
           ${out.cartoes ? `<div class="grade-grupos">${out.cartoes}</div>` : ''}
+          ${out.texto || ''}
           <div class="grade-graficos">${(out.graficos || []).map((g) => `<section class="cartao"><h3>${esc(g.titulo)}</h3>${g.html}</section>`).join('')}</div>
           ${out.nota ? `<p class="nota-relatorio">${esc(out.nota)}</p>` : ''}
           ${out.tabela ? ui.tabela({ id: 'rel-' + chave, colunas: out.tabela.colunas, linhas: out.tabela.linhas, nomePlanilha: chave, porPagina: 100 }) : ''}

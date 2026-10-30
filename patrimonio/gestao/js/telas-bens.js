@@ -102,7 +102,7 @@
       { chave: 'conta', titulo: 'Conta', valor: (b) => VP.nome('contas', b.contaId), oculta: true },
       { chave: 'natureza', titulo: 'Natureza de despesa', valor: (b) => VP.ND.doBem(b), oculta: true },
       { chave: 'caracteristicas', titulo: 'Características', valor: (b) => [b.detalhes?.marca, b.detalhes?.modelo, b.detalhes?.cor, b.veiculo?.placa].filter(Boolean).join(' · '), oculta: true },
-      { chave: 'score', titulo: 'Score', num: true, valor: (b) => VP.score(b)?.valor ?? '', oculta: true },
+      { chave: 'score', titulo: 'Nota do bem (0 a 100)', num: true, valor: (b) => VP.score(b)?.valor ?? '', oculta: true },
       ...VP.colunasRegistro(true)
     ];
   };
@@ -249,8 +249,25 @@
           ['Acumulado total', `${u.moeda(inicial + manual + automatica)}${s.base ? ` (${u.pct2(s.acumulada / s.base)} do valor)` : ''}`], ['Conta de débito', VP.nome('contas', p.contaDebito)], ['Conta de crédito', VP.nome('contas', p.contaCredito)]];
       const extra = (avisos.length ? avisos.map((a) => `<p class="aviso-inline">${esc(a)}</p>`).join('') : '')
         + (proj.length && !exaust ? `<h4>Valor ao longo da vida útil</h4>${G.linha(proj, { largura: 330, altura: 190, formato: u.moeda, formatoEixo: u.moedaCurta, rotuloX: u.mesNome, marcaX: VP.Plataforma.hoje().slice(0, 7), titulo: 'Valor do bem ao longo da vida útil' })}` : '')
-        + listaMensal();
+        + quadroComponentes() + listaMensal();
       return cartao(nome, 'depreciacao', linhas, extra);
+    };
+    // componentes significativos (NBC TSP 37, 30/10/2026): telhado, elevador, parte elétrica… cada um com vida útil própria
+    const quadroComponentes = () => {
+      if (VP.naoDeprecia(b) || ['intangivel'].includes(b.tipo) || (b.depreciacao?.metodo || 'linear') !== 'linear') return '';
+      const comps = (b.componentes || []).filter((c) => !c.removido);
+      const soma = comps.reduce((t, c) => t + Number(c.valor || 0), 0);
+      const k = s.inicio ? Math.max(0, u.mesesEntre(s.inicio, VP.Plataforma.hoje().slice(0, 7))) : 0;
+      const quotaC = (c) => { const v = Number(c.valor), n = Number(c.vidaUtilMeses) || 0; return n ? (v - v * (Number(c.residualPct) || 0) / 100) / n : 0; };
+      const reav = s.marco && s.marco.tipo === 'reavaliacao';
+      return `<section class="componentes" id="sec-componentes"><h4>Componentes (partes com vida útil própria)</h4>
+        <p class="ajuda">Para bens com partes importantes que se desgastam em tempos diferentes (ex.: prédio: telhado 20 anos, elevador 15, parte elétrica 25). Cada parte deprecia no seu prazo; o resto do valor segue a vida útil do bem. Norma: NBC TSP 37, a partir de 01/01/2027 [A conferir no texto oficial].</p>
+        ${reav && comps.length ? '<p class="aviso-inline">Depois da reavaliação, o bem deprecia inteiro pela vida útil nova. Revise os componentes (valores novos) se ainda forem usados.</p>' : ''}
+        ${comps.length ? `<div class="tabela-rolagem"><table class="tabela" data-sem-planilha><thead><tr><th>Parte</th><th class="num">Valor</th><th class="num">Vida útil</th><th class="num">Residual</th><th>Desde</th><th class="num">Por mês</th>${b.status !== 'baixado' ? '<th aria-label="Ações"></th>' : ''}</tr></thead><tbody>
+          ${comps.map((c) => `<tr><td>${esc(c.nome)}</td><td class="num">${u.moeda(c.valor)}</td><td class="num">${c.vidaUtilMeses} meses</td><td class="num">${String(c.residualPct || 0).replace('.', ',')}%</td><td>${c.inicio ? esc(u.mesExtenso(c.inicio)) : 'início do bem'}</td><td class="num">${u.moeda(quotaC(c))}</td>${b.status !== 'baixado' ? `<td><button class="botao pequeno" data-comp-editar="${esc(c.id)}">Editar</button> <button class="botao pequeno" data-comp-remover="${esc(c.id)}">Tirar</button></td>` : ''}</tr>`).join('')}
+          <tr><td><b>Resto do bem</b></td><td class="num">${u.moeda(Math.max(0, s.base - soma))}</td><td class="num">${s.vidaUtilMeses || '—'} meses</td><td colspan="${b.status !== 'baixado' ? 4 : 3}" class="ajuda">vida útil e residual do bem</td></tr>
+          </tbody></table></div>` : ''}
+        ${b.status !== 'baixado' ? '<button class="botao pequeno" data-comp-novo>+ Componente</button>' : ''}</section>`;
     };
     // mês a mês: o que foi lançado no mês, % do valor do bem, acumulado em R$ e % e o valor que ficou
     const listaMensal = () => {
@@ -277,7 +294,7 @@
           <div class="resumo-linha">
             ${G.numero('Valor contábil', u.moeda(s.liquido), b.status === 'baixado' ? 'Bem baixado' : `Aquisição ${u.moeda(VP.eventosDoBem(id).find((e) => e.tipo === 'incorporacao')?.valor || 0)}`)}
             ${G.numero('Depreciação acumulada', u.moeda(s.acumulada), VP.naoDeprecia(b) ? 'Não deprecia' : `${u.moeda(tx.mensal)} por mês`)}
-            ${G.numero('Estado', estadoTxt(b.estado), sc ? `Score ${sc.valor} · ${sc.faixa}` : '')}
+            ${G.numero('Estado', estadoTxt(b.estado), sc ? `Nota do bem ${sc.valor} de 100 · ${sc.faixa}` : '')}
             ${G.numero('Responsável', b.responsavelId ? VP.nome('responsaveis', b.responsavelId) : 'Sem responsável', VP.nome('unidades', b.unidadeId))}
           </div>
           ${VP.naoDeprecia(b) ? '' : `<div class="ficha-vida"><span>Vida útil usada</span>${G.medidor(s.consumido, `${u.pct(s.consumido)} de ${s.vidaUtilMeses} meses`)}</div>`}
@@ -294,12 +311,16 @@
       ${b.loteBaixaId ? `<p class="aviso-inline">Baixado no lote <a href="#baixa-lote/${esc(b.loteBaixaId)}">${esc(VP.db.pega('lotesBaixa', b.loteBaixaId)?.numero || '')}</a> (ata no lote).</p>` : ''}
       ${b.status === 'inservivel' ? '<p class="aviso-inline">Bem <b>inservível</b>: disponível para leilão, doação ou transferência. Inclua num lote em <a href="#baixa-lote">Baixa em lote (leilão)</a> ou use “Volta ao uso” se voltar a servir.</p>' : ''}
       <div class="barra-acoes">
-        ${b.status === 'baixado' ? '<span class="aviso-inline">Bem baixado: só consulta e impressão.</span>' : `
+        ${b.status === 'baixado' ? '<span class="aviso-inline">Bem baixado: só consulta e impressão.</span> <button class="botao" data-acao="imprimir">Imprimir ficha</button> <button class="botao" data-acao="etiqueta">Etiqueta</button>' : `
         <button class="botao" data-acao="transferir">Transferir</button>
-        ${['desuso', 'cedido', 'manutencao', 'inservivel'].includes(b.status) ? '<button class="botao" data-acao="retorno">Volta ao uso</button>' : '<button class="botao" data-acao="desuso">Desuso</button>'}
-        ${b.status !== 'inservivel' ? '<button class="botao" data-acao="inservivel">Inservível</button>' : ''}
         <button class="botao" data-acao="manutencao">Manutenção / despesa</button>
         <button class="botao" data-acao="vistoria">Vistoria</button>
+        ${['desuso', 'cedido', 'manutencao', 'inservivel'].includes(b.status) ? '<button class="botao" data-acao="retorno">Volta ao uso</button>' : ''}
+        <button class="botao" data-acao="baixa">Baixa</button>
+        <button class="botao" data-acao="imprimir">Imprimir ficha</button>
+        <details class="mais-acoes"><summary class="botao">Mais ações</summary><div class="mais-acoes-lista">
+        ${['desuso', 'cedido', 'manutencao', 'inservivel'].includes(b.status) ? '' : '<button class="botao" data-acao="desuso">Desuso</button>'}
+        ${b.status !== 'inservivel' ? '<button class="botao" data-acao="inservivel">Inservível</button>' : ''}
         <button class="botao" data-acao="observacao">Observação</button>
         <button class="botao" data-acao="anexar">Anexar arquivo</button>
         <button class="botao" data-acao="melhoria">Melhoria</button>
@@ -310,10 +331,9 @@
         <button class="botao" data-acao="unir" title="O mesmo bem tem dois cadastros (duas plaquetas)">Unir cadastros</button>
         ${VP.imoveis && VP.imoveis.ehImovel(b) && b.tipo === 'imovel' ? '<button class="botao" data-acao="baixaParcial" title="Perda de área ou demolição de parte">Baixa parcial</button> <button class="botao" data-acao="desmembrar" title="Dividir em dois ou mais imóveis">Dividir imóvel</button> <button class="botao" data-acao="remembrar" title="Juntar com outros imóveis num só">Juntar imóveis</button>' : ''}
         <button class="botao" data-acao="laudo" title="Laudo técnico antes da baixa">Laudo para baixa</button>
-        <button class="botao" data-acao="baixa">Baixa</button>`}
-        <button class="botao" data-acao="imprimir">Imprimir ficha</button>
         <button class="botao" data-acao="etiqueta">Etiqueta</button>
-        ${b.status !== 'baixado' ? '<button class="botao perigo" data-acao="excluir">Excluir</button>' : ''}
+        <button class="botao perigo" data-acao="excluir">Excluir</button>
+        </div></details>`}
       </div>
       <div class="grade-secoes">
         ${cartao('Identificação', 'identificacao', [['Produto', VP.nome('produtos', b.produtoId)], ['Complemento', b.complemento], ['Tombamento', b.detalhes?.tombamento], ['Data do tombamento', u.data(b.detalhes?.dataTombamento)], ['Plaqueta anterior', b.plaquetaAnterior], ['Como entrou', b.situacaoAquisicao], ['Data de aquisição', b.dataAquisicaoDesconhecida ? `Desconhecida (entrou no sistema em ${u.data(b.dataAquisicao)})` : u.data(b.dataAquisicao)], ['Data de incorporação', u.data(b.dataIncorporacao)], ['Comissão', b.comissaoId ? VP.nome('comissoes', b.comissaoId) : ''], ['Exercícios anteriores', b.exerciciosAnteriores ? 'Sim' : 'Não'], ['Entidade', VP.nome('entidades', b.entidadeId)], ['Criticidade de uso', ['', 'Baixa', 'Média', 'Alta'][b.criticidade || 2]]])}
@@ -360,6 +380,39 @@
           await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'alteracao', { descricao: `Importação conferida (${b.conferenciaImportacao.motivo})` })] });
           ui.aviso('Conferido.'); recarrega();
         });
+        // componentes do bem (NBC TSP 37)
+        const formComp = (c) => ui.formulario({
+          titulo: c ? 'Editar componente' : 'Novo componente', largura: 'media',
+          intro: `<p class="ajuda">Valor do bem: ${u.moeda(s.base)}. A soma dos componentes não pode passar dele. O que sobra é o "resto do bem", que segue a vida útil do bem.</p>`,
+          campos: [{ chave: 'nome', rotulo: 'Parte (ex.: telhado, elevador, parte elétrica)', obrigatorio: true },
+            { chave: 'valor', rotulo: 'Valor da parte (R$)', tipo: 'moeda', obrigatorio: true, largura: 'meia' }, { chave: 'vidaUtilMeses', rotulo: 'Vida útil (meses)', tipo: 'numero', obrigatorio: true, largura: 'meia' },
+            { chave: 'residualPct', rotulo: 'Valor residual (%), pode ser zero', tipo: 'numero', obrigatorio: true, largura: 'meia' }, { chave: 'inicio', rotulo: 'Começa a depreciar em (vazio = junto com o bem)', tipo: 'data', largura: 'meia', ajuda: 'Use quando a parte foi trocada depois (ex.: telhado novo).' },
+            { chave: '_justificativa', rotulo: 'Justificativa', tipo: 'area', obrigatorio: true }],
+          valores: c ? Object.assign({}, c, { inicio: c.inicio ? c.inicio + '-01' : '' }) : { residualPct: 0 },
+          salvar: async (v) => {
+            if (!(v.valor > 0)) return 'Informe o valor da parte.';
+            if (!(v.vidaUtilMeses > 0)) return 'Informe a vida útil em meses.';
+            if (v.residualPct < 0 || v.residualPct >= 100) return 'O residual (%) deve ser de 0 a 99.';
+            const outros = (b.componentes || []).filter((x) => !x.removido && (!c || x.id !== c.id)).reduce((t, x) => t + Number(x.valor || 0), 0);
+            if (outros + v.valor > s.base + 0.005) return `A soma dos componentes (${u.moeda(outros + v.valor)}) passa do valor do bem (${u.moeda(s.base)}).`;
+            const novo = { id: c?.id || u.id(), nome: v.nome, valor: v.valor, vidaUtilMeses: Math.floor(v.vidaUtilMeses), residualPct: v.residualPct, inicio: v.inicio ? v.inicio.slice(0, 7) : '' };
+            b.componentes = (b.componentes || []).filter((x) => !c || x.id !== c.id).concat(novo);
+            const ev = VP.novoEvento(b.id, 'alteracao', { descricao: `${c ? 'Componente alterado' : 'Componente incluído'}: ${novo.nome}`, extra: { mudancas: [{ campo: `Componente ${novo.nome}`, antes: c ? `${u.moeda(c.valor)}, ${c.vidaUtilMeses} meses, ${c.residualPct}%` : '', depois: `${u.moeda(novo.valor)}, ${novo.vidaUtilMeses} meses, ${novo.residualPct}%` }], justificativa: v._justificativa } });
+            await VP.db.gravarVarias({ bens: [b], eventos: [ev] }); ui.aviso('Componente salvo. Vale a partir do próximo fechamento do mês.'); recarrega();
+          }
+        });
+        area.querySelector('[data-comp-novo]')?.addEventListener('click', () => formComp(null));
+        area.querySelectorAll('[data-comp-editar]').forEach((el) => el.addEventListener('click', () => formComp((b.componentes || []).find((x) => x.id === el.dataset.compEditar))));
+        area.querySelectorAll('[data-comp-remover]').forEach((el) => el.addEventListener('click', async () => {
+          const c = (b.componentes || []).find((x) => x.id === el.dataset.compRemover);
+          if (!c || !await ui.confirmar(`Tirar o componente <b>${esc(c.nome)}</b>? O valor dele volta para o resto do bem. Fica registrado no histórico.`, { sim: 'Tirar' })) return;
+          c.removido = VP.Plataforma.hoje();
+          await VP.db.gravarVarias({ bens: [b], eventos: [VP.novoEvento(b.id, 'alteracao', { descricao: `Componente retirado: ${c.nome}`, extra: { mudancas: [{ campo: `Componente ${c.nome}`, antes: `${u.moeda(c.valor)}, ${c.vidaUtilMeses} meses`, depois: 'retirado' }] } })] });
+          ui.aviso('Componente retirado.'); recarrega();
+        }));
+        // "Mais ações": fecha ao escolher uma ação ou ao clicar fora
+        const mais = area.querySelector('.mais-acoes');
+        if (mais) { mais.addEventListener('click', (e) => { if (e.target.closest('[data-acao]')) mais.open = false; }); document.addEventListener('click', (e) => { if (mais.open && !mais.contains(e.target)) mais.open = false; }); }
         area.querySelectorAll('[data-acao]').forEach((el) => el.addEventListener('click', () => {
           const a = el.dataset.acao;
           const um = [b];

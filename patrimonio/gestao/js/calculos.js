@@ -61,6 +61,13 @@
     else if (p.tabela === 'receita' && p.taxaAnual) residual = base * p.taxaAnual / 100;
     else residual = p.residualTipo === 'percentual' ? base * (p.residual || 0) / 100 : (p.residual || 0);
     residual = Math.min(residual, base);
+    // componentes (NBC TSP 37, 30/10/2026): cada um com valor, vida útil e residual próprios; o resto do bem segue a regra acima
+    const comps = (bem.componentes || []).filter((c) => !c.removido && Number(c.valor) > 0);
+    if (comps.length && !(marco && marco.tipo === 'reavaliacao')) {
+      const somaComp = Math.min(base, comps.reduce((t, c) => t + Number(c.valor), 0));
+      const fr = base ? (base - somaComp) / base : 0;
+      residual = comps.reduce((t, c) => t + Number(c.valor) * (Number(c.residualPct) || 0) / 100, 0) + residual * fr;
+    }
     let inicio = null;
     if (marco) {
       inicio = marco.tipo === 'incorporacao' && p.inicio ? p.inicio.slice(0, 7) : u.somaMeses(marco.data, 1);
@@ -155,6 +162,8 @@
       const qtd = VP.eventosDoBem(bem.id).filter((e) => e.tipo === 'unidades' && e.data.slice(0, 7) === ym)
         .reduce((t, e) => t + (e.dados.quantidade || 0), 0);
       q = s.depreciavel * qtd / total;
+    } else if (VP.temComponentes(bem, s)) {
+      q = VP.quotaComponentes(bem, s, u.mesesEntre(s.inicio, ym));
     } else {
       q = s.depreciavel / s.vidaUtilMeses;
     }
@@ -162,10 +171,28 @@
   };
 
   // Taxas para mostrar na ficha (referência: método linear)
+  // Componentes do bem (NBC TSP 37): quota do mês k (contado do início da depreciação) = soma dos componentes ainda na
+  // vida útil + o resto do bem (valor que sobra, com a vida útil e o residual do bem). Depois de uma reavaliação, vale o bem inteiro.
+  VP.temComponentes = (bem, s) => (bem.depreciacao?.metodo || 'linear') === 'linear' && (bem.componentes || []).some((c) => !c.removido && Number(c.valor) > 0) && !(s.marco && s.marco.tipo === 'reavaliacao');
+  VP.quotaComponentes = (bem, s, k) => {
+    const p = bem.depreciacao || {};
+    const comps = (bem.componentes || []).filter((c) => !c.removido && Number(c.valor) > 0);
+    let q = 0, soma = 0;
+    for (const c of comps) {
+      const v = Number(c.valor), n = Number(c.vidaUtilMeses) || 0; soma += v;
+      const kc = c.inicio ? u.mesesEntre(s.inicio, c.inicio) : 0; // componente trocado depois: começa no mês dele
+      const idx = k - Math.max(0, kc);
+      if (n && idx >= 0 && idx < n) q += (v - v * (Number(c.residualPct) || 0) / 100) / n;
+    }
+    const resto = Math.max(0, s.base - soma);
+    const resRes = p.tabela === 'receita' && p.taxaAnual ? resto * p.taxaAnual / 100 : p.residualTipo === 'percentual' ? resto * (p.residual || 0) / 100 : s.base ? (p.residual || 0) * resto / s.base : 0;
+    if (s.vidaUtilMeses && k < s.vidaUtilMeses && resto > 0) q += (resto - resRes) / s.vidaUtilMeses;
+    return q;
+  };
   VP.taxas = (bem) => {
     const s = VP.saldo(bem);
     const p = bem.depreciacao || {};
-    const mensal = s.vidaUtilMeses ? r2(s.depreciavel / s.vidaUtilMeses) : 0;
+    const mensal = VP.temComponentes(bem, s) && s.inicio ? r2(VP.quotaComponentes(bem, s, Math.max(0, u.mesesEntre(s.inicio, VP.Plataforma.hoje().slice(0, 7))))) : s.vidaUtilMeses ? r2(s.depreciavel / s.vidaUtilMeses) : 0;
     return { mensal, anual: r2(mensal * 12), percentualAnual: s.base ? mensal * 12 / s.base : 0 };
   };
 
@@ -176,11 +203,14 @@
     const p = bem.depreciacao || {};
     const pts = [];
     let acum = 0;
-    for (let k = 0; k <= s.vidaUtilMeses; k++) {
+    // com componentes, a projeção vai até o último componente terminar
+    const nProj = VP.temComponentes(bem, s) ? Math.max(s.vidaUtilMeses, ...(bem.componentes || []).filter((c) => !c.removido).map((c) => (Number(c.vidaUtilMeses) || 0) + Math.max(0, c.inicio ? u.mesesEntre(s.inicio, c.inicio) : 0))) : s.vidaUtilMeses;
+    for (let k = 0; k <= nProj; k++) {
       const ym = u.somaMeses(s.inicio, k);
       pts.push({ x: ym, y: r2(s.base - acum) });
       let q;
       if (p.metodo === 'somaDigitos') q = s.depreciavel * (s.vidaUtilMeses - k) / (s.vidaUtilMeses * (s.vidaUtilMeses + 1) / 2);
+      else if (VP.temComponentes(bem, s)) q = VP.quotaComponentes(bem, s, k);
       else q = s.depreciavel / s.vidaUtilMeses; // unidades e exaustão: aproximação linear para a projeção
       acum = Math.min(s.depreciavel, acum + Math.max(0, q));
     }

@@ -267,7 +267,7 @@
         <div class="linha-botoes"><button type="button" class="botao pequeno" data-todas>Marcar todas</button><button type="button" class="botao pequeno" data-nenhuma>Desmarcar todas</button></div>
         <div class="lista-marcar colunas">${colunas.map((c) => `<label><input type="checkbox" value="${esc(c.chave)}" ${!salvas || salvas.includes(c.chave) ? 'checked' : ''}> ${esc(c.titulo)}</label>`).join('')}</div>
         <label>Salvar esta escolha como modelo (opcional) <input data-nome-modelo placeholder="Ex.: Planilha para o sistema X"></label>
-        <label>Formato <select data-formato><option value="xlsx">Excel (.xlsx)</option><option value="csv">Planilha simples (CSV)</option><option value="json">Arquivo de dados (JSON)</option></select></label>`,
+        <label>Formato <select data-formato><option value="xlsx">Excel (.xlsx)</option><option value="csv">Planilha simples (abre no Excel e em qualquer programa)</option><option value="json">Arquivo para outros sistemas (técnico)</option></select></label>`,
       botoes: [{ texto: 'Cancelar' }, { texto: 'Baixar', classe: 'primario', acao: (d) => {
         const marcadas = [...d.querySelectorAll('.colunas input:checked')].map((i) => i.value);
         if (!marcadas.length) { ui.aviso('Marque pelo menos uma informação.', 'erro'); return false; }

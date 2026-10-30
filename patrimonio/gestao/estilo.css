@@ -656,3 +656,6 @@ body.papel-consulta [data-nova-viagem], body.papel-consulta button[data-fechar].
 @media (max-width: 760px) { .tv-lados { grid-template-columns: 1fr; } }
 /* Botões do topo da tela no celular: texto longo quebra a linha em vez de passar da largura da tela (29/10/2026) */
 @media (max-width: 760px) { .acoes-tela .botao { max-width: 100%; white-space: normal; text-align: center; } }
+/* Datas do registro e o que mudou em cada alteração (pendência 07, 29/10/2026) */
+.registro-datas { margin: 0 0 10px; }
+.ev-mudancas { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--texto-2); }

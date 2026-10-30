@@ -1,4 +1,4 @@
-/* VitalPat Patrimônio · Gestão — Itens de controle (fora do balancete).
+/* VitalPat Patrimônio · Gestão — Relação carga (fora do balancete).
    Bens de pequeno valor (padrão: abaixo de R$ 300, ajustável em Configurações) ou de pouca durabilidade: cadastro simples,
    sem plaqueta (código interno C-000001), sem depreciação e fora do balancete, da contabilidade e do inventário oficial.
    [A conferir] base legal do limite (Portaria STN 448/2002, MCASP) — pendência no checklist. */
@@ -63,7 +63,7 @@
     const cols = C.colunasExportar().filter((c) => chaves.includes(c.k));
     const l = C.filtrar(f);
     const cab = cols.map((c) => c.t), linha = (x) => cols.map((c) => lerCampo(x, c));
-    let abas = [{ nome: 'Itens de controle', cabecalho: cab, linhas: l.map(linha) }];
+    let abas = [{ nome: 'Relação carga', cabecalho: cab, linhas: l.map(linha) }];
     if (f.porUnidade && l.length) {
       const g = new Map(); for (const x of l) { const k = x.unidadeId || ''; if (!g.has(k)) g.set(k, []); g.get(k).push(x); }
       abas = [...g.entries()].map(([id, xs]) => ({ nome: id ? VP.nome('unidades', id) : 'Sem unidade', cabecalho: cab, linhas: xs.map(linha) }));
@@ -71,8 +71,8 @@
     VP.baixarXLSX('itens-de-controle', abas);
     return l.length;
   };
-  C.abaModelo = () => ({ nome: 'Itens de controle', cabecalho: C.CAMPOS.map((c) => c.t), linhas: [C.CAMPOS.map((c) => ({ descricao: 'EXEMPLO — apague esta linha', quantidade: 10, valorUnitario: 25.9, unidadeId: VP.db.lista('unidades')[0]?.nome || '', dataEntrada: '15/03/2024', vidaUtilAnos: 2, estado: 'Novo' }[c.k] ?? ''))] });
-  C.instrucoes = () => [['Itens de controle', `Bens de pequeno valor (até ${u.moeda(VP.config().limiteControle)}) e pouca durabilidade (até ${VP.config().limiteControleMeses} meses). Não ganham plaqueta, não depreciam e não entram no balancete. Código C-000001: vazio = item novo; preenchido = atualiza o item.`]]
+  C.abaModelo = () => ({ nome: 'Relação carga', cabecalho: C.CAMPOS.map((c) => c.t), linhas: [C.CAMPOS.map((c) => ({ descricao: 'EXEMPLO — apague esta linha', quantidade: 10, valorUnitario: 25.9, unidadeId: VP.db.lista('unidades')[0]?.nome || '', dataEntrada: '15/03/2024', vidaUtilAnos: 2, estado: 'Novo' }[c.k] ?? ''))] });
+  C.instrucoes = () => [['Relação carga', `Bens de pequeno valor (até ${u.moeda(VP.config().limiteControle)}) e pouca durabilidade (até ${VP.config().limiteControleMeses} meses). Não ganham plaqueta, não depreciam e não entram no balancete. Código C-000001: vazio = item novo; preenchido = atualiza o item.`]]
     .concat(C.CAMPOS.map((c) => [c.t + (c.obrig ? ' (obrigatória para item novo)' : ''), c.ajuda || '']));
 
   // ------------------------------------------------------------------ importação (chamada pela tela Exportar e importar)
@@ -123,14 +123,14 @@
           const x = { id: u.id(), codigo: 'C-' + String(n++).padStart(6, '0'), descricao: v.descricao, quantidade: v.quantidade || 1, valorUnitario: v.valorUnitario || 0, unidadeId: v.unidadeId || '', localizacao: v.localizacao || '', responsavelId: v.responsavelId || VP.db.pega('unidades', v.unidadeId)?.responsavelId || '', dataEntrada: v.dataEntrada || hoje(), vidaUtilAnos: v.vidaUtilAnos || null, estado: v.estado || 8, fornecedorId: v.fornecedorId || '', nf: { numero: v['nf.numero'] || '' }, observacao: v.observacao || '', situacao: 'ativo', fotos: [], anexos: [], historico: [], criadoEm: VP.Plataforma.agoraISO() };
           hist(x, 'Incluído pela importação de planilha');
           extra.bensControle.push(x); reg.controleNovos.push(x.id);
-          sucesso.push(`Item de controle novo: ${x.codigo} · ${x.descricao}`);
+          sucesso.push(`Item da relação carga novo: ${x.codigo} · ${x.descricao}`);
         } else {
           const x = VP.db.pega('bensControle', it.controleId);
           const antes = {};
           for (const m of it.mudancas) { antes[m.k] = pega(x, m.k) ?? null; poe(x, m.k, m.depois); }
           hist(x, 'Atualizado pela importação de planilha: ' + it.mudancas.map((m) => m.t).join(', '));
           extra.bensControle.push(x); reg.controleAlterados.push({ id: x.id, antes });
-          sucesso.push(`Item de controle atualizado: ${x.codigo} · ${x.descricao}`);
+          sucesso.push(`Item da relação carga atualizado: ${x.codigo} · ${x.descricao}`);
         }
       } catch (e) { falhas.push({ item: `${it.aba}, linha ${it.linha}`, motivo: e.message }); }
     }
@@ -164,7 +164,7 @@
     { chave: 'nf.numero', rotulo: 'Nota fiscal', largura: 'meia' },
     { chave: 'observacao', rotulo: 'Observação', tipo: 'area' }];
   C.novo = (depois, valores = {}) => ui.formulario({
-    titulo: 'Novo item de controle', largura: 'media', valores,
+    titulo: 'Novo item da relação carga', largura: 'media', valores,
     intro: `<p class="ajuda">Para bens de pequeno valor (até ${u.moeda(VP.config().limiteControle)}) <b>e</b> pouca durabilidade (até ${VP.config().limiteControleMeses} meses). Se passar de um dos dois, é patrimônio com plaqueta. Não ganha plaqueta, não deprecia e não entra no balancete.</p>`,
     campos: campos(true).concat([{ chave: 'arquivos', rotulo: 'Foto ou nota (opcional)', tipo: 'arquivo', multiplo: true }]),
     salvar: async (v) => {
@@ -178,7 +178,7 @@
       depois && depois(x);
     }
   });
-  // Monta um item de controle sem gravar (nota fiscal e importação de bens mandam para cá o que a pessoa escolheu)
+  // Monta um item da relação carga sem gravar (nota fiscal e importação de bens mandam para cá o que a pessoa escolheu)
   C.montar = (v, codigo, texto) => {
     const x = { id: u.id(), codigo, descricao: v.descricao, quantidade: v.quantidade || 1, valorUnitario: v.valorUnitario || 0, unidadeId: v.unidadeId || '', localizacao: v.localizacao || '', responsavelId: v.responsavelId || VP.db.pega('unidades', v.unidadeId)?.responsavelId || '', dataEntrada: v.dataEntrada || hoje(), vidaUtilAnos: v.vidaUtilAnos || null, estado: Number(v.estado || 8), fornecedorId: v.fornecedorId || '', nf: v.nf || {}, observacao: v.observacao || '', situacao: 'ativo', fotos: [], anexos: [], historico: [], criadoEm: VP.Plataforma.agoraISO() };
     if (v.centroCustoPendente) x.centroCustoPendente = v.centroCustoPendente;
@@ -258,7 +258,7 @@
     const ativos = C.lista().filter((x) => x.situacao !== 'baixado');
     const vencidos = ativos.filter(C.vencido);
     return {
-      titulo: 'Itens de controle',
+      titulo: 'Relação carga',
       acoes: `<a class="botao" href="#planilhas/exportar">Exportar / importar</a> ${pode() ? '<button class="botao primario" data-novo-controle>+ Novo item</button>' : ''}`,
       html: `<p class="ajuda">Bens de pequeno valor (até ${u.moeda(VP.config().limiteControle)}) <b>e</b> de pouca durabilidade (até ${VP.config().limiteControleMeses} meses) — regra ajustável em Configurações. Se passar de um dos dois, é patrimônio com plaqueta. São controlados aqui, <b>sem plaqueta, sem depreciação e fora do balancete</b>.</p>
         <div class="resumo-linha">${G.numero('Itens em uso', u.inteiro(ativos.length))}${G.numero('Quantidade', u.inteiro(ativos.reduce((t, x) => t + (Number(x.quantidade) || 0), 0)))}${G.numero('Valor total (informativo)', u.moeda(ativos.reduce((t, x) => t + C.total(x), 0)))}${G.numero('Fim da vida útil', u.inteiro(vencidos.length), 'para avaliar troca')}</div>
@@ -267,7 +267,7 @@
           <label>Situação <select data-fc="status"><option value="ativos" ${f.status === 'ativos' ? 'selected' : ''}>Em uso</option><option value="baixados" ${f.status === 'baixados' ? 'selected' : ''}>Com baixa</option><option value="todos" ${f.status === 'todos' ? 'selected' : ''}>Todos</option></select></label>
           <label>Buscar <input data-fc="busca" value="${esc(f.busca)}" placeholder="Código, nome, local"></label>
         </div>
-        ${ui.tabela({ id: 'controle', linhas: l, porPagina: 50, nomePlanilha: 'itens-de-controle', vazio: 'Nenhum item de controle.', colunas: [
+        ${ui.tabela({ id: 'controle', linhas: l, porPagina: 50, nomePlanilha: 'relacao-carga', vazio: 'Nenhum item da relação carga.', colunas: [
           { chave: 'codigo', titulo: 'Código', html: (x) => `<a href="#controle" data-ver-controle="${esc(x.id)}">${esc(x.codigo)}</a>`, valor: (x) => x.codigo },
           { chave: 'descricao', titulo: 'Descrição' },
           { chave: 'quantidade', titulo: 'Qtd.', num: true, soma: true },
@@ -279,7 +279,7 @@
           { chave: 'dataEntrada', titulo: 'Entrada', valor: (x) => u.data(x.dataEntrada), ordenar: (x) => x.dataEntrada },
           { chave: 'fim', titulo: 'Fim da vida útil', valor: (x) => u.data(C.fimVida(x)), ordenar: (x) => C.fimVida(x) || '9', html: (x) => (C.vencido(x) ? `<b class="erro-txt">${u.data(C.fimVida(x))}</b>` : esc(u.data(C.fimVida(x)))) },
           { chave: 'estado', titulo: 'Estado', valor: (x) => L.estados[x.estado] || '' },
-          { chave: 'situacao', titulo: 'Situação', valor: (x) => (x.situacao === 'baixado' ? 'Com baixa' : 'Em uso') }] })}`,
+          { chave: 'situacao', titulo: 'Situação', valor: (x) => (x.situacao === 'baixado' ? 'Com baixa' : 'Em uso') }, ...VP.colunasRegistro()] })}`,
       ligar() {
         const re = () => VP.app.render();
         ui.ligarTabela('controle');

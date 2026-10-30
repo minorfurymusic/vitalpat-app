@@ -1,5 +1,5 @@
-/* VitalPat Patrimônio · Gestão — classificador: patrimônio (com plaqueta) ou item de controle (sem plaqueta)?
-   Regra local (Configurações): item de controle só quando o valor é até o limite (padrão R$ 300) E a vida útil é até
+/* VitalPat Patrimônio · Gestão — classificador: patrimônio (com plaqueta) ou item da relação carga (sem plaqueta)?
+   Regra local (Configurações): item da relação carga só quando o valor é até o limite (padrão R$ 300) E a vida útil é até
    o limite de meses (padrão 24). Passou de um dos dois: patrimônio com plaqueta.
    A vida útil de cada item vem da lista "Vida útil dos itens" (Cadastros, editável). Se o nome não está na lista,
    usa a vida útil da classificação. Se ninguém sabe, na dúvida a sugestão é plaqueta.
@@ -96,7 +96,7 @@
     const res = { vidaUtilMeses: vida, fonteVida, regra: r, decisaoAnterior: dec && !dec.excluido ? dec : null };
     if (res.decisaoAnterior) {
       res.sugestao = dec.escolha;
-      res.motivo = `da última vez (${u.data(dec.ultimaEm)}) você escolheu ${dec.escolha === 'controle' ? 'item de controle' : 'patrimônio com plaqueta'} para este item`;
+      res.motivo = `da última vez (${u.data(dec.ultimaEm)}) você escolheu ${dec.escolha === 'controle' ? 'item da relação carga' : 'patrimônio com plaqueta'} para este item`;
       res.certeza = true;
     } else {
       res.sugestao = r.controle === true ? 'controle' : 'patrimonio';
@@ -105,7 +105,7 @@
     }
     return res;
   };
-  K.textoSugestao = (a) => (a.sugestao === 'controle' ? 'Item de controle' : 'Patrimônio (plaqueta)');
+  K.textoSugestao = (a) => (a.sugestao === 'controle' ? 'Item da relação carga' : 'Patrimônio (plaqueta)');
 
   // Guarda a decisão da pessoa (vira a sugestão da próxima vez). Só vale para bens baratos, onde a regra importa.
   K.registrarDecisoes = async (lista) => {
@@ -131,7 +131,7 @@
     <div class="destino-item ${a.sugestao === 'controle' ? 'sug-controle' : ''}">
       <label>Vai para <select ${attrs}>
         <option value="patrimonio" ${a.sugestao === 'patrimonio' ? 'selected' : ''}>Patrimônio (com plaqueta)</option>
-        <option value="controle" ${a.sugestao === 'controle' ? 'selected' : ''}>Item de controle (sem plaqueta)</option>
+        <option value="controle" ${a.sugestao === 'controle' ? 'selected' : ''}>Item da relação carga (sem plaqueta)</option>
       </select></label>
       <small>Sugestão: <b>${K.textoSugestao(a)}</b> — ${u.esc(a.motivo)}${a.fonteVida ? ` (${u.esc(a.fonteVida)})` : ''}. Você decide.</small>
     </div>`;

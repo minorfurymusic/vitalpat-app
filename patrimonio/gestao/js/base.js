@@ -196,7 +196,7 @@ VP.CONFIG_PADRAO = {
   avisoSeguroIntervalo: 7,
   avisoGarantiaDias: 30,
   reavaliacaoAnos: 4,
-  limiteControle: 300, // itens de controle: valor até o qual o bem pode ser só controlado (fora do balancete) — regra local, ajustável
+  limiteControle: 300, // itens da relação carga: valor até o qual o bem pode ser só controlado (fora do balancete) — regra local, ajustável
   prazoTermoDias: 15, // termo de responsabilidade: prazo para devolver assinado (pendência até anexar)
   limiteControleMeses: 24, // …e vida útil até este número de meses. Passou de um dos dois limites: tem plaqueta (regra de Rio do Sul, 08/10/2026)
   avisoImovelDias: 60, // documentos e cessões de imóveis: avisar com esta antecedência
@@ -219,7 +219,7 @@ VP.COLECOES = ['bens', 'eventos', 'unidades', 'responsaveis', 'classificacoes', 
   'documentosImovel', 'cessoesImovel', 'pendenciasImovel', 'avaliacoesImovel', 'termosParticulares',
   // Exportar e importar (planilhas)
   'importacoesPlanilha', 'importacoesAnexos',
-  // Itens de controle (fora do balancete) e o classificador (vida útil dos itens e decisões guardadas)
+  // Relação carga (fora do balancete) e o classificador (vida útil dos itens e decisões guardadas)
   'bensControle', 'vidaUtilItens', 'decisoesItens',
   // Baixa em lote (leilão) e termos de responsabilidade com prazo
   'lotesBaixa', 'termosResp',
@@ -259,11 +259,20 @@ VP.db = {
     return incluirExcluidos ? v : v.filter((x) => !x.excluido);
   },
   pega(col, id) { return this.dados[col].get(id) || null; },
+  // Data e pessoa de criação (ou importação) e da última alteração de cada registro (29/10/2026, pendência 07).
+  // Campos com "_" na frente: não entram na comparação da trilha de versões. origem = 'importação' durante as importações.
+  origem: '',
+  carimbar(d) {
+    const agora = VP.Plataforma.agoraISO(), quem = VP.sessao?.usuario || 'demonstração';
+    if (!d._criadoEm) { d._criadoEm = agora; d._criadoPor = quem; if (this.origem) d._criadoComo = this.origem; }
+    d._alteradoEm = agora; d._alteradoPor = quem;
+  },
   // Grava vários registros de uma vez, numa única operação
   gravar(col, docs) {
     const lista = Array.isArray(docs) ? docs : [docs];
     for (const d of lista) {
       if (!d.id) d.id = VP.u.id();
+      this.carimbar(d);
       d.chave = `${col}/${d.id}`;
       this.dados[col].set(d.id, d);
     }
@@ -282,6 +291,7 @@ VP.db = {
     for (const [col, docs] of Object.entries(mapa)) {
       for (const d of docs) {
         if (!d.id) d.id = VP.u.id();
+        this.carimbar(d);
         d.chave = `${col}/${d.id}`;
         this.dados[col].set(d.id, d);
         s.put(d);
@@ -358,6 +368,23 @@ VP.corrigirAClassificar = async ({ gravar = true } = {}) => {
   if (gravar && lista.length) await VP.db.gravar('classificacoes', lista);
   return lista.length;
 };
+
+// Datas do registro para mostrar (pendência 07): criado ou importado, e última alteração. Registro antigo sem carimbo:
+// o bem usa a data da incorporação no sistema (evento); o resto fica "sem registro".
+VP.datasRegistro = (d, bem = false) => {
+  let criado = d?._criadoEm ? { em: d._criadoEm, por: d._criadoPor, importado: d._criadoComo === 'importação' } : null;
+  if (!criado && bem) {
+    const inc = VP.eventosDoBem(d.id).find((e) => e.tipo === 'incorporacao');
+    if (inc?.criadoEm) criado = { em: inc.criadoEm, por: inc.usuario, importado: /importa/i.test(inc.descricao || '') };
+  }
+  return { criado, alterado: d?._alteradoEm ? { em: d._alteradoEm, por: d._alteradoPor } : null };
+};
+VP.textoDataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+// colunas para as listas (escondidas no começo; aparecem em "Colunas")
+VP.colunasRegistro = (bem = false) => [
+  { chave: '_criadoEm', titulo: 'Cadastrado em', oculta: true, valor: (x) => { const c = VP.datasRegistro(x, bem).criado; return c ? `${VP.textoDataHora(c.em)}${c.importado ? ' (importado)' : ''}` : 'sem registro'; }, ordenar: (x) => VP.datasRegistro(x, bem).criado?.em || '' },
+  { chave: '_alteradoEm', titulo: 'Última alteração', oculta: true, valor: (x) => { const a = VP.datasRegistro(x, bem).alterado; return a ? `${VP.textoDataHora(a.em)} · ${a.por || ''}` : 'sem registro'; }, ordenar: (x) => x._alteradoEm || '' }
+];
 
 // Nome do desgaste: amortização (intangível), exaustão (recursos retirados) ou depreciação (29/10/2026)
 VP.desgaste = (b) => (b?.tipo === 'intangivel' ? 'Amortização' : b?.depreciacao?.metodo === 'exaustao' ? 'Exaustão' : 'Depreciação');

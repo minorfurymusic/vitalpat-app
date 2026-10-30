@@ -127,14 +127,14 @@
       colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'ato', titulo: 'Ato' }, { chave: 'membros', titulo: 'Membros' }] },
     seguradoras: { titulo: 'Seguradoras e corretoras', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }, { chave: 'corretora', rotulo: 'É corretora', tipo: 'bool' }], colunas: [{ chave: 'nome', titulo: 'Nome' }, { chave: 'corretora', titulo: 'Tipo', valor: (x) => (x.corretora ? 'Corretora' : 'Seguradora') }] },
     vidaUtilItens: { titulo: 'Vida útil dos itens', ordenar: (l) => l.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
-      intro: () => `<p class="ajuda">Quanto tempo cada tipo de item costuma durar. O sistema usa esta lista para <b>sugerir</b> se um item novo é patrimônio (com plaqueta) ou item de controle: item de controle só quando custa até ${VP.u.moeda(VP.config().limiteControle)} <b>e</b> dura até ${VP.config().limiteControleMeses} meses (Configurações). A lista inicial é uma sugestão do sistema: ajuste à regra do município.</p>`,
+      intro: () => `<p class="ajuda">Quanto tempo cada tipo de item costuma durar. O sistema usa esta lista para <b>sugerir</b> se um item novo é patrimônio (com plaqueta) ou item da relação carga: item da relação carga só quando custa até ${VP.u.moeda(VP.config().limiteControle)} <b>e</b> dura até ${VP.config().limiteControleMeses} meses (Configurações). A lista inicial é uma sugestão do sistema: ajuste à regra do município.</p>`,
       campos: () => [{ chave: 'nome', rotulo: 'Item', obrigatorio: true }, { chave: 'termos', rotulo: 'Palavras que identificam o item na descrição (separe com |)', ajuda: 'Ex.: fone|headset. Sem acento. Vazio = usa o nome.' }, { chave: 'vidaUtilMeses', rotulo: 'Vida útil (meses)', tipo: 'numero', obrigatorio: true }],
-      colunas: [{ chave: 'nome', titulo: 'Item' }, { chave: 'termos', titulo: 'Palavras' }, { chave: 'vidaUtilMeses', titulo: 'Vida útil (meses)', num: true }, { chave: 'sugestao', titulo: 'Até o limite de valor vira', valor: (x) => (Number(x.vidaUtilMeses) <= Number(VP.config().limiteControleMeses) ? 'Item de controle' : 'Patrimônio (plaqueta)') }, { chave: 'origem', titulo: 'Origem', valor: (x) => x.origem || 'Incluído pela pessoa' }] },
-    decisoesItens: { titulo: 'Decisões guardadas (item de controle ou plaqueta)', ordenar: (l) => l.sort((a, b) => String(b.ultimaEm).localeCompare(String(a.ultimaEm))),
+      colunas: [{ chave: 'nome', titulo: 'Item' }, { chave: 'termos', titulo: 'Palavras' }, { chave: 'vidaUtilMeses', titulo: 'Vida útil (meses)', num: true }, { chave: 'sugestao', titulo: 'Até o limite de valor vira', valor: (x) => (Number(x.vidaUtilMeses) <= Number(VP.config().limiteControleMeses) ? 'Item da relação carga' : 'Patrimônio (plaqueta)') }, { chave: 'origem', titulo: 'Origem', valor: (x) => x.origem || 'Incluído pela pessoa' }] },
+    decisoesItens: { titulo: 'Decisões guardadas (item da relação carga ou plaqueta)', ordenar: (l) => l.sort((a, b) => String(b.ultimaEm).localeCompare(String(a.ultimaEm))),
       intro: () => '<p class="ajuda">O que já foi decidido para cada item barato. Quando o mesmo item aparece de novo (nota fiscal, planilha ou novo bem), a sugestão segue a última decisão. Corrija aqui ou mande para a Lixeira para o sistema voltar a usar a regra.</p>',
-      campos: () => [{ chave: 'nome', rotulo: 'Item', obrigatorio: true }, { chave: 'escolha', rotulo: 'Decisão', tipo: 'select', vazio: false, opcoes: [['controle', 'Item de controle (sem plaqueta)'], ['patrimonio', 'Patrimônio (com plaqueta)']] }],
+      campos: () => [{ chave: 'nome', rotulo: 'Item', obrigatorio: true }, { chave: 'escolha', rotulo: 'Decisão', tipo: 'select', vazio: false, opcoes: [['controle', 'Item da relação carga (sem plaqueta)'], ['patrimonio', 'Patrimônio (com plaqueta)']] }],
       antesDeSalvar: (d) => { d.ultimaEm = d.ultimaEm || VP.Plataforma.hoje(); },
-      colunas: [{ chave: 'nome', titulo: 'Item' }, { chave: 'escolha', titulo: 'Decisão', valor: (x) => (x.escolha === 'controle' ? 'Item de controle' : 'Patrimônio (plaqueta)') }, { chave: 'ultimaEm', titulo: 'Última vez', valor: (x) => VP.u.data(x.ultimaEm), ordenar: (x) => x.ultimaEm }, { chave: 'vezes', titulo: 'Vezes (controle / plaqueta)', valor: (x) => `${x.vezes?.controle || 0} / ${x.vezes?.patrimonio || 0}` }, { chave: 'ultimoValor', titulo: 'Último valor', valor: (x) => (x.ultimoValor != null ? VP.u.moeda(x.ultimoValor) : '') }] },
+      colunas: [{ chave: 'nome', titulo: 'Item' }, { chave: 'escolha', titulo: 'Decisão', valor: (x) => (x.escolha === 'controle' ? 'Item da relação carga' : 'Patrimônio (plaqueta)') }, { chave: 'ultimaEm', titulo: 'Última vez', valor: (x) => VP.u.data(x.ultimaEm), ordenar: (x) => x.ultimaEm }, { chave: 'vezes', titulo: 'Vezes (controle / plaqueta)', valor: (x) => `${x.vezes?.controle || 0} / ${x.vezes?.patrimonio || 0}` }, { chave: 'ultimoValor', titulo: 'Último valor', valor: (x) => (x.ultimoValor != null ? VP.u.moeda(x.ultimoValor) : '') }] },
     tiposGarantia: { titulo: 'Tipos de garantia', campos: () => [{ chave: 'nome', rotulo: 'Nome', obrigatorio: true }], colunas: [{ chave: 'nome', titulo: 'Nome' }] },
     // Matrículas do cartório (22/10/2026): cadastro separado do imóvel. Um imóvel pode estar em várias matrículas e uma
     // matrícula pode ter vários imóveis; a ligação é feita por pessoa (etapa seguinte). Baixada nunca é apagada.
@@ -243,7 +243,7 @@
     // vindo de um link (ex.: painel de Relatórios): os filtros do endereço substituem os anteriores
     const doLink = Object.entries(query).filter(([k]) => k === 'busca' || defs.some((d) => d.chave === k));
     if (doLink.length) { for (const k of Object.keys(v)) delete v[k]; for (const [k, x] of doLink) { const d = defs.find((y) => y.chave === k); v[k] = d?.tipo === 'bool' ? true : x; } }
-    const colunas = c.colunas.concat([{ chave: '_acoes', titulo: '', html: (x) => `<button class="botao pequeno" data-editar-cad="${esc(x.id)}">Editar</button> <button class="botao pequeno perigo" data-excluir-cad="${esc(x.id)}">Excluir</button>` }]);
+    const colunas = c.colunas.concat(VP.colunasRegistro(), [{ chave: '_acoes', titulo: '', html: (x) => `<button class="botao pequeno" data-editar-cad="${esc(x.id)}">Editar</button> <button class="botao pequeno perigo" data-excluir-cad="${esc(x.id)}">Excluir</button>` }]);
     const filtrar = () => {
       const f = ui.limparValores(v);
       const termos = f.busca ? semAcento(f.busca).split(/\s+/).filter(Boolean) : [];
@@ -489,9 +489,9 @@
       ['unidadeSolicitacaoBaixa', 'select', 'Unidade que recebe pedidos de baixa', '', () => opc('unidades')],
       ['validaEntidadeOrgao', 'bool', 'Conferir se a unidade pertence à entidade do bem', '']] },
     { secao: 'Avisos', itens: [
-      ['limiteControle', 'numero', 'Item de controle: valor até (R$)', 'Item de controle (sem plaqueta, fora do balancete) só quando o valor é até este limite E a vida útil é até o limite de meses abaixo. Passou de um dos dois: patrimônio com plaqueta. O sistema só sugere; a pessoa decide. Regra local.'],
+      ['limiteControle', 'numero', 'Item da relação carga: valor até (R$)', 'Item da relação carga (sem plaqueta, fora do balancete) só quando o valor é até este limite E a vida útil é até o limite de meses abaixo. Passou de um dos dois: patrimônio com plaqueta. O sistema só sugere; a pessoa decide. Regra local.'],
       ['prazoTermoDias', 'numero', 'Termo de responsabilidade: prazo para devolver assinado (dias)', 'Quando alguém passa a ser responsável por bens, o sistema abre o termo com este prazo. Fica pendente até o termo assinado ser anexado.'],
-      ['limiteControleMeses', 'numero', 'Item de controle: vida útil até (meses)', 'Padrão 24 meses (2 anos). A vida útil de cada item vem da lista em Cadastros → Vida útil dos itens.'],
+      ['limiteControleMeses', 'numero', 'Item da relação carga: vida útil até (meses)', 'Padrão 24 meses (2 anos). A vida útil de cada item vem da lista em Cadastros → Vida útil dos itens.'],
       ['avisoSeguroDias', 'numero', 'Avisar vencimento de seguro com quantos dias de antecedência', ''],
       ['avisoSeguroIntervalo', 'numero', 'Repetir o aviso a cada quantos dias', ''],
       ['avisoGarantiaDias', 'numero', 'Avisar vencimento de garantia com quantos dias', ''],
@@ -544,7 +544,7 @@
     return {
       titulo: 'Lixeira',
       html: `<p class="ajuda">Nada é apagado de verdade. O que foi excluído fica aqui e pode voltar.</p>${ui.tabela({ id: 'lixeira', linhas: itens, nomePlanilha: 'lixeira', vazio: 'A Lixeira está vazia.', colunas: [
-        { chave: 'tipo', titulo: 'O que é', valor: (i) => (i.col === 'bens' ? 'Bem' : i.col === 'bensControle' ? 'Item de controle' : i.col === 'lotesBaixa' ? 'Lote de baixa' : CAD[i.col] ? CAD[i.col].titulo.split(' (')[0] : VP.auditoria?.LIXEIRA[i.col] || VP.frota.COLECOES[i.col]) },
+        { chave: 'tipo', titulo: 'O que é', valor: (i) => (i.col === 'bens' ? 'Bem' : i.col === 'bensControle' ? 'Item da relação carga' : i.col === 'lotesBaixa' ? 'Lote de baixa' : CAD[i.col] ? CAD[i.col].titulo.split(' (')[0] : VP.auditoria?.LIXEIRA[i.col] || VP.frota.COLECOES[i.col]) },
         { chave: 'nome', titulo: 'Nome', valor: (i) => (VP.auditoria?.LIXEIRA[i.col] ? VP.auditoria.nomeNaLixeira(i.col, i.x) : i.col === 'bens' || i.col === 'bensControle' ? `${i.x.codigo} · ${i.x.descricao}` : i.col === 'lotesBaixa' ? `${i.x.numero} · ${i.x.descricao}` : i.x.nome || i.x.codigo || i.x.placa || i.x.numero || i.x.item || i.x.tipo || i.x.descricao || u.data(i.x.data || i.x.saida)) },
         { chave: 'quando', titulo: 'Excluído em', valor: (i) => u.data(i.x.excluidoEm) },
         { chave: 'acao', titulo: '', html: (i) => `<button class="botao pequeno" data-restaurar-item="${esc(i.id)}">Restaurar</button>` }] })}`,

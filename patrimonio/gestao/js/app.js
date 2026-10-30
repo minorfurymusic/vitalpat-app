@@ -7,7 +7,7 @@
   // Menu em grupos (sempre abertos). Ícones desenhados para o VitalPat: traço simples, cor do texto.
   const GRUPOS = [
     ['Visão geral', [['campo', 'Início rápido', 'campo'], ['painel', 'Painel', 'painel'], ['relatorios', 'Relatórios', 'relatorios']]],
-    ['Bens', [['bens/moveis', 'Bens móveis', 'moveis'], ['bens/imoveis', 'Bens imóveis', 'imoveis'], ['frota', 'Frota', 'frota'], ['controle', 'Itens de controle', 'controle']]],
+    ['Bens', [['bens/moveis', 'Bens móveis', 'moveis'], ['bens/imoveis', 'Bens imóveis', 'imoveis'], ['frota', 'Frota', 'frota'], ['controle', 'Relação carga', 'controle']]],
     ['Movimentações', [['entradas', 'Entradas', 'entradas'], ['transferencias', 'Transferências', 'transferencias'], ['baixa-lote', 'Baixa em lote', 'baixa'], ['termos', 'Termos', 'termos']]],
     ['Controle', [['inventario', 'Inventário', 'inventario'], ['manutencao', 'Manutenção', 'manutencao'], ['agualuz', 'Água e luz', 'agualuz'], ['auditoria', 'Auditoria', 'auditoria'], ['financeiro/fechamento', 'Financeiro', 'financeiro']]],
     ['Sistema', [['historico', 'Histórico', 'historico'], ['cadastros/unidades', 'Cadastros', 'cadastros'], ['configuracoes', 'Configurações', 'configuracoes'], ['planilhas', 'Exportar e importar', 'planilhas'], ['lixeira', 'Lixeira', 'lixeira']]]

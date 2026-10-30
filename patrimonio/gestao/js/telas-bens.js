@@ -102,7 +102,8 @@
       { chave: 'conta', titulo: 'Conta', valor: (b) => VP.nome('contas', b.contaId), oculta: true },
       { chave: 'natureza', titulo: 'Natureza de despesa', valor: (b) => VP.ND.doBem(b), oculta: true },
       { chave: 'caracteristicas', titulo: 'Características', valor: (b) => [b.detalhes?.marca, b.detalhes?.modelo, b.detalhes?.cor, b.veiculo?.placa].filter(Boolean).join(' · '), oculta: true },
-      { chave: 'score', titulo: 'Score', num: true, valor: (b) => VP.score(b)?.valor ?? '', oculta: true }
+      { chave: 'score', titulo: 'Score', num: true, valor: (b) => VP.score(b)?.valor ?? '', oculta: true },
+      ...VP.colunasRegistro(true)
     ];
   };
 
@@ -341,6 +342,7 @@
           <div class="segmentos" role="group" aria-label="Filtrar linha do tempo">
             <button class="ativo" data-grupo="">Tudo</button><button data-grupo="financeiro">Financeiro</button><button data-grupo="fisico">Físico</button><button data-grupo="registro">Registros</button>
           </div></header>
+        ${(() => { const r = VP.datasRegistro(b, true); return `<p class="ajuda registro-datas" id="registro-datas"><b>${r.criado?.importado ? 'Importado' : 'Cadastrado'} em</b> ${r.criado ? `${esc(VP.textoDataHora(r.criado.em))}${r.criado.por ? ` por ${esc(r.criado.por)}` : ''}` : 'sem registro (antes de 29/10/2026)'} · <b>Última alteração</b> ${r.alterado ? `${esc(VP.textoDataHora(r.alterado.em))}${r.alterado.por ? ` por ${esc(r.alterado.por)}` : ''}` : 'sem registro'}. Abaixo, as movimentações e alterações (o que mudou, antes e depois, quem e quando).</p>`; })()}
         <div id="linha-tempo">${linhaDoTempo(b, '')}</div>
       </section>`;
     return {
@@ -442,7 +444,7 @@
       const pode = !e.cancelado && ['agregacao', 'reavaliacao', 'manutencao', 'despesa'].includes(e.tipo) || (!e.cancelado && e.tipo === 'depreciacao' && !e.loteId && !e.dados.saldoInicial);
       return `<li class="ev g-${tp.grupo} ${e.cancelado ? 'cancelado' : ''}">
         <span class="ev-data">${u.data(e.data)}</span>
-        <span class="ev-corpo"><b>${esc(tp.nome)}</b>${e.valor != null ? ` · ${u.moeda(e.valor)}` : ''}${e.tipo === 'reavaliacao' && e.dados.valorNovo != null ? ` · novo valor ${u.moeda(e.dados.valorNovo)}` : ''}<br><small>${esc(e.descricao)}${e.dados.motivo ? ' · ' + esc(e.dados.motivo) : ''}${e.cancelado ? ` · <b>desfeito/estornado</b>${e.motivoCancelamento ? ' (' + esc(e.motivoCancelamento) + ')' : ''}` : ''} · por ${esc(e.usuario)}</small></span>
+        <span class="ev-corpo"><b>${esc(tp.nome)}</b>${e.valor != null ? ` · ${u.moeda(e.valor)}` : ''}${e.tipo === 'reavaliacao' && e.dados.valorNovo != null ? ` · novo valor ${u.moeda(e.dados.valorNovo)}` : ''}<br><small>${esc(e.descricao)}${e.dados.motivo ? ' · ' + esc(e.dados.motivo) : ''}${e.cancelado ? ` · <b>desfeito/estornado</b>${e.motivoCancelamento ? ' (' + esc(e.motivoCancelamento) + ')' : ''}` : ''} · por ${esc(e.usuario)}${e.criadoEm ? ` em ${esc(VP.textoDataHora(e.criadoEm))}` : ''}</small>${e.tipo === 'alteracao' && (e.dados.mudancas || []).length ? `<ul class="ev-mudancas">${e.dados.mudancas.map((m) => `<li>${esc(m.campo)}: ${esc(String(m.antes === '' || m.antes == null ? '—' : typeof m.antes === 'object' ? JSON.stringify(m.antes) : m.antes))} → ${esc(String(m.depois === '' || m.depois == null ? '—' : typeof m.depois === 'object' ? JSON.stringify(m.depois) : m.depois))}</li>`).join('')}${e.dados.justificativa ? `<li>Justificativa: ${esc(e.dados.justificativa)}</li>` : ''}</ul>` : ''}</span>
         ${pode && b.status !== 'baixado' ? `<button class="botao pequeno" data-estornar="${esc(e.id)}">Estornar</button>` : ''}
       </li>`;
     }).join('')}</ol>`;
@@ -758,12 +760,12 @@
           const vidaPrev = tipo === 'intangivel' ? (u.num(el('prazoMeses')?.value) || 0) : tvr?.vidaUtilMeses || dc?.vidaUtilMeses;
           const textoTv = !tvr ? '' : tvr.tabela === 'receita' ? ` · residual zero: tabela da Receita ${lTv ? `${lTv.chave} (${lTv.anos} anos; residual = taxa de ${String(lTv.taxa).replace('.', ',')}%)` : 'sem linha (vale a vida útil da classificação)'}` : ` · tabela SIAFI ${lTv ? lTv.chave : 'sem linha na classificação'}`;
           const lim = VP.config().limiteControle;
-          // Classificador: item barato E de pouca durabilidade pode ser item de controle. Só sugere; a pessoa decide.
+          // Classificador: item barato E de pouca durabilidade pode ser item da relação carga. Só sugere; a pessoa decide.
           const an = VP.controle && VP.classificador && tipo === 'movel' && v.valor > 0 && v.valor <= lim ? VP.classificador.analisar({ descricao: el('descricao').value, valor: v.valor, classificacaoId: texto ? acharClassificacao(texto, tipo)?.id : '', tipo }) : null;
           ultimaAnalise = an;
           const dica = !an ? '' : an.sugestao === 'controle'
-            ? `<p class="aviso-inline" id="dica-controle">Sugestão: <b>item de controle</b> (sem plaqueta, fora do balancete) — ${esc(an.motivo)}${an.fonteVida ? ` (${esc(an.fonteVida)})` : ''}. Você decide. <button type="button" class="botao pequeno" data-ir-controle>Cadastrar como item de controle</button></p>`
-            : !an.certeza ? `<p class="ajuda" id="dica-controle">Valor até ${u.moeda(lim)}, mas o sistema não sabe quanto este item dura. Se durar até ${VP.config().limiteControleMeses} meses, pode ser <b>item de controle</b>. <button type="button" class="botao pequeno" data-ir-controle>Cadastrar como item de controle</button></p>` : '';
+            ? `<p class="aviso-inline" id="dica-controle">Sugestão: <b>item da relação carga</b> (sem plaqueta, fora do balancete) — ${esc(an.motivo)}${an.fonteVida ? ` (${esc(an.fonteVida)})` : ''}. Você decide. <button type="button" class="botao pequeno" data-ir-controle>Cadastrar como item da relação carga</button></p>`
+            : !an.certeza ? `<p class="ajuda" id="dica-controle">Valor até ${u.moeda(lim)}, mas o sistema não sabe quanto este item dura. Se durar até ${VP.config().limiteControleMeses} meses, pode ser <b>item da relação carga</b>. <button type="button" class="botao pequeno" data-ir-controle>Cadastrar como item da relação carga</button></p>` : '';
           document.getElementById('previa-novo').innerHTML = dica + (dc ? `<b>Prévia:</b> ${qtd} bem(ns) a partir do código ${cfg.codigoManual ? (v.codigo || '?') : VP.proximoCodigo()} · conta ${esc(VP.nome('contas', dc.contaId))} · ${dc.naoDeprecia ? 'não deprecia' : (tipo === 'intangivel' && !vidaPrev ? 'sem prazo: não amortiza' : `vida útil ${vidaPrev || '?'} meses, residual ${resPrevisto ?? dc.residualPct ?? 0}${el('residualTipo').value === 'valor' ? ' (R$)' : '%'}${textoTv}`)}${v.valor ? ` · total ${u.moeda(v.valor * qtd)}` : ''}` : '');
           document.querySelector('[data-ir-controle]')?.addEventListener('click', () => VP.controle.novo(async (x) => { await VP.classificador.registrarDecisoes([{ descricao: x.descricao, escolha: 'controle', valor: x.valorUnitario, sugerido: ultimaAnalise?.sugestao }]); VP.app.ir('#controle'); }, { descricao: el('descricao').value, quantidade: v.quantidade || 1, valorUnitario: v.valor, unidadeId: v.unidadeId, responsavelId: v.responsavelId, fornecedorId: v.fornecedorId, estado: v.estado }));
         };
@@ -908,7 +910,7 @@
         if (ant.ncm && it.ncm && ant.ncm !== it.ncm) difs.push({ campo: 'ncm', rotulo: 'NCM', nota: it.ncm, anterior: ant.ncm });
         if (ant.unidadeMedida && it.unidade && u.normalizar(ant.unidadeMedida) !== u.normalizar(it.unidade)) difs.push({ campo: 'unidade', rotulo: 'Unidade de medida', nota: it.unidade, anterior: ant.unidadeMedida });
       }
-      // Classificador: sugere item de controle (barato E pouca durabilidade) ou patrimônio. A pessoa decide em cada item.
+      // Classificador: sugere item da relação carga (barato E pouca durabilidade) ou patrimônio. A pessoa decide em cada item.
       const an = VP.classificador && VP.controle ? VP.classificador.analisar({ descricao: it.nome, valor: it.valorUnitario, classificacaoId: ant?.classificacaoId, tipo }) : null;
       return { it, ant, difs, an };
     });
@@ -923,8 +925,8 @@
         { chave: 'estado', rotulo: 'Estado', tipo: 'select', opcoes: Object.entries(L.estados).reverse(), padrao: 8, vazio: false, largura: 'meia' },
         { chave: 'empenho', rotulo: 'Empenho (ano/número)', largura: 'meia', padrao: oc?.empenho || '' }, { chave: 'dataIncorporacao', rotulo: 'Data de incorporação', tipo: 'data', padrao: VP.Plataforma.hoje(), largura: 'meia' },
         { chave: 'recebidoPor', rotulo: 'Recebido por (quem conferiu e recebeu)', largura: 'meia' }].concat(pdf || nf.doOC ? [] : [{ chave: 'pdfNota', rotulo: 'PDF da nota fiscal (opcional): vai junto em cada bem', tipo: 'arquivo', aceita: '.pdf,application/pdf', largura: 'meia' }]))}</div>
-      ${pdf ? `<p class="ajuda">Nota fiscal (PDF): <b>${esc(pdf.nome)}</b>. Vai junto em cada bem e item de controle incluído.</p>` : ''}
-      ${nSugControle ? `<p class="aviso-inline" id="aviso-sug-controle"><b>${nSugControle} de ${linhas.length} item(ns)</b> foram sugeridos como <b>item de controle</b> (sem plaqueta, fora do balancete): custam até ${u.moeda(VP.config().limiteControle)} e duram até ${VP.config().limiteControleMeses} meses. Confira em cada item o campo "Vai para" e mude se precisar.</p>` : ''}
+      ${pdf ? `<p class="ajuda">Nota fiscal (PDF): <b>${esc(pdf.nome)}</b>. Vai junto em cada bem e item da relação carga incluído.</p>` : ''}
+      ${nSugControle ? `<p class="aviso-inline" id="aviso-sug-controle"><b>${nSugControle} de ${linhas.length} item(ns)</b> foram sugeridos como <b>item da relação carga</b> (sem plaqueta, fora do balancete): custam até ${u.moeda(VP.config().limiteControle)} e duram até ${VP.config().limiteControleMeses} meses. Confira em cada item o campo "Vai para" e mude se precisar.</p>` : ''}
       <p class="ajuda">Os dados da nota valem. Quando um item já existe no cadastro e alguma informação mudou, ela aparece em destaque: confira e escolha, em cada uma, se fica a da nota ou a anterior.</p>
       <datalist id="dl-classes-nf">${classes.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
       <div class="itens-nf">${linhas.map((l, i) => `
@@ -941,7 +943,7 @@
               <label><input type="radio" name="d-${i}-${k}" value="anterior"> Anterior: ${esc(d.anterior)}</label></div>`).join('')}</div>` : ''}
         </div>`).join('')}</div>
       <p class="erro-form" role="alert"></p>`;
-    // item de controle não precisa de classificação: os campos somem quando "Vai para" é item de controle
+    // item da relação carga não precisa de classificação: os campos somem quando "Vai para" é item da relação carga
     setTimeout(() => document.querySelectorAll('.item-nf [data-destino]').forEach((el) => el.addEventListener('change', () => el.closest('.item-nf').classList.toggle('vai-controle', el.value === 'controle'))), 0);
     ui.modal({ titulo: nf.doOC ? 'Conferir itens da ordem de compra' : 'Conferir itens da nota fiscal', largura: 'grande', corpo, botoes: [{ texto: 'Cancelar' }, { texto: 'Incluir bens', classe: 'primario', fecha: false, acao: async (d, fechar) => {
       const geral = ui.lerCampos(d, [{ chave: 'unidadeId' }, { chave: 'estado' }, { chave: 'empenho' }, { chave: 'dataIncorporacao' }, { chave: 'recebidoPor' }]).valores;
@@ -959,18 +961,18 @@
       if (!pdfN && pdfEscolhido) { try { pdfN = await lerPdfNota(pdfEscolhido); } catch (e) { d.querySelector('.erro-form').textContent = e.message; return false; } }
       let forn = fornecedor;
       const sucesso = [], falhas = [], avisos = [];
-      if (pdfN) avisos.push(`Nota fiscal (PDF) anexada em cada bem e item de controle: ${pdfN.nome}`);
+      if (pdfN) avisos.push(`Nota fiscal (PDF) anexada em cada bem e item da relação carga: ${pdfN.nome}`);
       if (oc) avisos.push(`Ordem de compra ${oc.numero}/${oc.ano}${oc.anexo ? ' (PDF)' : ''} ligada a cada bem${oc.anexo ? ' e anexada' : ''}.`);
       const nfDoBem = nf.doOC ? {} : { numero: nf.numero, serie: nf.serie, emissao: nf.emissao, chave: nf.chave, af: nf.af || '' };
       if (!forn) { forn = { id: u.id(), nome: nf.emitente.nome || `Fornecedor CNPJ ${nf.emitente.cnpj}`, documento: nf.emitente.cnpj, criadoPelaNota: true }; await VP.db.gravar('fornecedores', forn); avisos.push(`Fornecedor "${forn.nome}" incluído nos Cadastros.`); }
-      // Itens de controle: sem plaqueta, sem classificação, fora do balancete
+      // Relação carga: sem plaqueta, sem classificação, fora do balancete
       if (paraControle.length) {
         let n = Number(VP.controle.proximoCodigo().replace(/\D/g, ''));
         const itensC = paraControle.map(({ l }) => VP.controle.montar({ descricao: l.it.nome, quantidade: Math.max(1, Math.round(l.it.quantidade)), valorUnitario: l.it.valorUnitario, unidadeId: geral.unidadeId, dataEntrada: geral.dataIncorporacao || nf.emissao, estado: Number(geral.estado || 8), fornecedorId: forn.id, nf: nfDoBem, vidaUtilAnos: l.an?.vidaUtilMeses ? Math.round(l.an.vidaUtilMeses / 12 * 10) / 10 : null }, 'C-' + String(n++).padStart(6, '0'), nf.doOC ? `Incluído pela ordem de compra ${oc.numero}/${oc.ano} (item ${l.it.n})` : `Incluído pela nota fiscal ${nf.numero} (item ${l.it.n})`));
         if (pdfN) itensC.forEach((x) => x.anexos.push(copiaNota(pdfN)));
         if (oc?.anexo) itensC.forEach((x) => x.anexos.push(copiaNota(oc.anexo, 'Ordem de compra')));
         await VP.db.gravar('bensControle', itensC);
-        for (const x of itensC) sucesso.push(`Item de controle ${x.codigo} · ${x.descricao} (${u.inteiro(x.quantidade)} un., sem plaqueta)`);
+        for (const x of itensC) sucesso.push(`Item da relação carga ${x.codigo} · ${x.descricao} (${u.inteiro(x.quantidade)} un., sem plaqueta)`);
       }
       await VP.classificador?.registrarDecisoes(escolhidos.filter(({ l }) => l.an).map((x) => ({ descricao: x.l.it.nome, escolha: destino(x), valor: x.l.it.valorUnitario, sugerido: x.l.an.sugestao })));
       const todosCriados = [];
@@ -995,7 +997,7 @@
       }
       if (todosCriados.length && VP.termos) { const tt = await VP.termos.abrir(todosCriados, 'nota fiscal'); if (tt.length) avisos.push(`${tt.length} termo(s) de responsabilidade aguardando assinatura (prazo ${VP.termos.prazoDias()} dias) — menu Termos.`); }
       fechar();
-      ui.resultado({ titulo: `${nf.doOC ? `Ordem de compra ${oc.numero}/${oc.ano}` : `Nota ${nf.numero}`}: ${paraControle.length ? 'bens e itens de controle incluídos' : 'bens incluídos'}`, sucesso: sucesso.concat(avisos), falhas });
+      ui.resultado({ titulo: `${nf.doOC ? `Ordem de compra ${oc.numero}/${oc.ano}` : `Nota ${nf.numero}`}: ${paraControle.length ? 'bens e itens da relação carga incluídos' : 'bens incluídos'}`, sucesso: sucesso.concat(avisos), falhas });
       VP.app.ir('#bens/' + (GRUPO_DO_TIPO[tipo] === 'frota' ? 'moveis' : GRUPO_DO_TIPO[tipo]));
     } }] });
   };

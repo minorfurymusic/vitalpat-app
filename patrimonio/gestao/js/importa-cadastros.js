@@ -77,7 +77,7 @@
       { k: 'nome', t: 'Item', obrig: true }, { k: 'termos', t: 'Palavras', apelidos: ['palavras que identificam o item'] }, { k: 'vidaUtilMeses', t: 'Vida útil (meses)', tipo: 'numero', obrig: true }],
       chaves: (x) => [norm(x.nome)] },
     decisoesItens: { aba: 'Decisões guardadas', titulo: 'Decisão guardada', campos: [
-      { k: 'nome', t: 'Item', obrig: true }, { k: 'escolha', t: 'Decisão', tipo: 'opcao', obrig: true, opcoes: [['controle', 'Item de controle'], ['patrimonio', 'Patrimônio (plaqueta)']] }],
+      { k: 'nome', t: 'Item', obrig: true }, { k: 'escolha', t: 'Decisão', tipo: 'opcao', obrig: true, opcoes: [['controle', 'Item da relação carga'], ['patrimonio', 'Patrimônio (plaqueta)'], ['controle', 'Item de controle']] }],
       chaves: (x) => [norm(x.nome)],
       // mesmo código que o classificador usa para achar a decisão pelo nome do item
       novoId: (x) => (VP.classificador?.idDecisao ? VP.classificador.idDecisao(x.nome) : u.id()), aoCriar: (x) => { x.vezes = { controle: 0, patrimonio: 0 }; x.ultimaEm = VP.Plataforma.hoje(); } },

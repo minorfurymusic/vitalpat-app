@@ -20,7 +20,7 @@
     veiculo: { nome: 'Veículos', tipos: ['veiculo'], tipoPadrao: 'veiculo' },
     imovel: { nome: 'Imóveis', tipos: ['imovel', 'infraestrutura'], tipoPadrao: 'imovel' }
   };
-  P.conjuntoDaAba = (nome) => { const cad = VP.importaCadastros?.cjDaAba(nome); if (cad) return cad; const n = u.normalizar(nome); return /centros? de custo|^unidades$/.test(n) ? 'unidades' : /veic/.test(n) ? 'veiculo' : /imov|terreno|predio/.test(n) ? 'imovel' : /controle/.test(n) ? 'controle' : /movel|moveis|bens/.test(n) ? 'movel' : null; };
+  P.conjuntoDaAba = (nome) => { const cad = VP.importaCadastros?.cjDaAba(nome); if (cad) return cad; const n = u.normalizar(nome); return /centros? de custo|^unidades$/.test(n) ? 'unidades' : /veic/.test(n) ? 'veiculo' : /imov|terreno|predio/.test(n) ? 'imovel' : /controle|relacao (de )?carga/.test(n) ? 'controle' : /movel|moveis|bens/.test(n) ? 'movel' : null; };
 
   // ------------------------------------------------------------------ referências (unidade, classificação…) por nome ou código
   const norm = (t) => u.normalizar(t).replace(/\s+/g, ' ');
@@ -195,7 +195,7 @@
     if (VP.controle) abas.push(VP.controle.abaModelo());
     const instr = [
       ['Como usar este modelo', ''],
-      ['1', 'Preencha uma linha por bem, na aba do tipo certo (Bens móveis, Veículos, Imóveis' + (VP.controle ? ', Itens de controle' : '') + '). Não mude os títulos da primeira linha.'],
+      ['1', 'Preencha uma linha por bem, na aba do tipo certo (Bens móveis, Veículos, Imóveis' + (VP.controle ? ', Relação carga' : '') + '). Não mude os títulos da primeira linha.'],
       ['2', 'Apague as linhas de EXEMPLO (o sistema recusa linha que começa com "EXEMPLO").'],
       ['3', 'Bem que já existe no sistema: informe a Plaqueta. Só as colunas preenchidas são atualizadas; célula vazia não apaga nada. O valor anterior fica no histórico do bem.'],
       ['4', 'Não mudam pela planilha (para ficar registrado): valor (use Reavaliação), unidade (use Transferência), data de aquisição e classificação.'],
@@ -388,7 +388,7 @@
           if ((v.valor ?? v._valorContabil) < 0) it.erros.push('Valor negativo');
           if (!v.classificacaoId) { it.classePadrao = grupoDoTipo(tp); s.gruposSemClasse.add(it.classePadrao); }
           it.classe = it.erros.length ? 'erro' : 'novo';
-          // Classificador: bem novo SEM plaqueta, barato, pode ser item de controle. Só sugere; a pessoa decide na prévia.
+          // Classificador: bem novo SEM plaqueta, barato, pode ser item da relação carga. Só sugere; a pessoa decide na prévia.
           const valorRef = v.valor ?? v._valorContabil;
           if (it.classe === 'novo' && !it.plaqueta && !v._aguardandoAvaliacao && tp === 'movel' && VP.classificador && VP.controle && valorRef != null && valorRef <= VP.config().limiteControle) {
             it.analise = VP.classificador.analisar({ descricao: it.descricao, valor: valorRef, classificacaoId: v.classificacaoId, tipo: tp });
@@ -482,7 +482,7 @@
     let codigo = VP.proximoCodigo();
     // plaquetas da planilha entram na conta antes: a automática nunca repete uma delas nem as que já existem
     const ctxPl = VP.contextoPlaquetas(s.previa.itens.map((x) => x.plaqueta).filter(Boolean));
-    // Linhas que a pessoa mandou para Itens de controle (sem plaqueta, fora do balancete)
+    // Linhas que a pessoa mandou para Relação carga (sem plaqueta, fora do balancete)
     const extraC = [], sucC = [];
     let nC = VP.controle ? Number(VP.controle.proximoCodigo().replace(/\D/g, '')) : 0;
     for (const it of marcados.filter((x) => x.cj !== 'controle' && x.cj !== 'unidades' && !ehCad(x.cj) && x.analise && x.destino === 'controle')) {
@@ -490,7 +490,7 @@
       const unidadeId = typeof v.unidadeId === 'string' && v.unidadeId.startsWith('__nova:') ? idUnidade.get(v.unidadeId.slice(7)) : v.unidadeId;
       const x = VP.controle.montar({ centroCustoPendente: semCentro(v),  descricao: v.descricao, quantidade: 1, valorUnitario: v.valor ?? v._valorContabil, unidadeId, localizacao: v.localizacao, responsavelId: v.responsavelId, dataEntrada: v.dataAquisicao, estado: v.estado, vidaUtilAnos: it.analise.vidaUtilMeses ? Math.round(it.analise.vidaUtilMeses / 12 * 10) / 10 : null, nf: v['nf.numero'] ? { numero: v['nf.numero'] } : {} }, 'C-' + String(nC++).padStart(6, '0'), `Incluído pela importação de planilha (${s.arquivo}), aba ${it.aba}, linha ${it.linha}`);
       extraC.push(x); reg.controleNovos.push(x.id);
-      sucC.push(`Item de controle novo: ${x.codigo} · ${x.descricao}`);
+      sucC.push(`Item da relação carga novo: ${x.codigo} · ${x.descricao}`);
     }
     const decisoes = marcados.filter((x) => x.analise).map((x) => ({ descricao: x.descricao, escolha: x.destino, valor: x.valores.valor ?? x.valores._valorContabil, sugerido: x.analise.sugestao }));
     for (const it of marcados.filter((x) => x.cj !== 'controle' && x.cj !== 'unidades' && !ehCad(x.cj) && !(x.analise && x.destino === 'controle'))) {
@@ -612,7 +612,7 @@
 
   const telaExportar = (nav) => {
     const f = VP.estado.expBens = VP.estado.expBens || { cj: 'movel', unidadeId: '', status: 'ativos', local: '', grupoId: '', porUnidade: false };
-    const cjs = Object.assign({}, Object.fromEntries(Object.entries(P.CONJUNTOS).map(([k, x]) => [k, x.nome])), VP.controle ? { controle: 'Itens de controle' } : {});
+    const cjs = Object.assign({}, Object.fromEntries(Object.entries(P.CONJUNTOS).map(([k, x]) => [k, x.nome])), VP.controle ? { controle: 'Relação carga' } : {});
     const ehControle = f.cj === 'controle';
     const cols = ehControle ? VP.controle.colunasExportar() : P.colunasExportar(f.cj);
     const salvas = ui.pref.ler('exp-colunas-' + f.cj);
@@ -674,7 +674,7 @@
     const n = new Map();
     const soma = (nome, q) => { if (q) n.set(nome, (n.get(nome) || 0) + q); };
     soma('Bens', h.novos.length + h.alterados.length);
-    soma('Itens de controle', (h.controleNovos || []).length + (h.controleAlterados || []).length);
+    soma('Relação carga', (h.controleNovos || []).length + (h.controleAlterados || []).length);
     for (const c of (h.cadastrosNovos || []).concat(h.cadastrosAlterados || [])) soma(VP.importaCadastros?.DEF[c.tabela]?.aba || c.tabela, 1);
     return [...n].map(([k, q]) => `${k}: ${u.inteiro(q)}`).join(' · ');
   };
@@ -682,7 +682,7 @@
     const s = st();
     const hist = VP.db.lista('importacoesPlanilha').sort((a, b) => String(b.data).localeCompare(String(a.data)));
     const camposDoCj = camposImp;
-    const cjs = Object.assign({}, Object.fromEntries(Object.entries(P.CONJUNTOS).map(([k, x]) => [k, x.nome])), VP.controle ? { controle: 'Itens de controle' } : {}, VP.importaUnidades ? { unidades: VP.importaUnidades.NOME + ' (só código e nome)' } : {}, VP.importaCadastros ? VP.importaCadastros.opcoesImportar() : {});
+    const cjs = Object.assign({}, Object.fromEntries(Object.entries(P.CONJUNTOS).map(([k, x]) => [k, x.nome])), VP.controle ? { controle: 'Relação carga' } : {}, VP.importaUnidades ? { unidades: VP.importaUnidades.NOME + ' (só código e nome)' } : {}, VP.importaCadastros ? VP.importaCadastros.opcoesImportar() : {});
     let corpo = '';
     if (s.previa) {
       const it = s.previa.itens;
@@ -714,7 +714,7 @@
           <div class="grade-depara">${[...s.gruposSemClasse].map((g) => `<label>${esc(P.NOMES_GRUPO[g])} (${u.inteiro(it.filter((x) => x.classePadrao === g).length)}) <select data-imp-classe="${g}"><option value="${P.ACLASSIFICAR}">A classificar (importação) — deprecia como "Demais bens"</option>${opcClasse(g).map(([id, nm]) => `<option value="${esc(id)}" ${s.classesPadrao[g] === id ? 'selected' : ''}>${esc(nm)}</option>`).join('')}</select></label>`).join('')}</div></div>` : ''}
         ${novasUn.length ? `<details class="cartao secao" id="novas-unidades"><summary><b>${u.inteiro(novasUn.length)} código(s) de centro de custo ainda não cadastrado(s)</b> — os bens ficam <b>sem centro de custo</b>, guardando o código, com pendência grave até você ligar o código a uma unidade. Se já souber, ligue aqui a uma unidade que já existe</summary>
           <div class="tabela-rolagem"><table class="tabela" data-sem-planilha><thead><tr><th>Código</th><th class="num">Bens</th><th>Ligar a</th></tr></thead><tbody>${novasUn.map(([cod, q]) => `<tr><td>${esc(cod)}</td><td class="num">${u.inteiro(q)}</td><td><select data-imp-liga="${esc(cod)}"><option value="">Deixar sem centro de custo (pendência)</option>${opcUn.map(([id, nm]) => `<option value="${esc(id)}" ${s.ligaUnidade[cod] === id ? 'selected' : ''}>${esc(nm)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></details>` : ''}
-        ${nAnalisados ? `<p class="aviso-inline" id="aviso-sug-controle-imp"><b>${u.inteiro(nAnalisados)} bem(ns) novo(s) sem plaqueta</b> custam até ${u.moeda(VP.config().limiteControle)}. Destes, <b>${u.inteiro(nSugControle)}</b> foram sugeridos como <b>item de controle</b> (sem plaqueta, fora do balancete). Confira em "Vai para" (filtro "Valor baixo: conferir destino") e mude se precisar.</p>` : ''}
+        ${nAnalisados ? `<p class="aviso-inline" id="aviso-sug-controle-imp"><b>${u.inteiro(nAnalisados)} bem(ns) novo(s) sem plaqueta</b> custam até ${u.moeda(VP.config().limiteControle)}. Destes, <b>${u.inteiro(nSugControle)}</b> foram sugeridos como <b>item da relação carga</b> (sem plaqueta, fora do balancete). Confira em "Vai para" (filtro "Valor baixo: conferir destino") e mude se precisar.</p>` : ''}
         <div class="linha-botoes"><label>Mostrar <select data-imp-filtro><option value="">Todos</option>${Object.entries(CLASSE).map(([k, [, nm]]) => `<option value="${k}" ${s.filtro === k ? 'selected' : ''}>${nm}</option>`).join('')}${nAnalisados ? `<option value="analisados" ${s.filtro === 'analisados' ? 'selected' : ''}>Valor baixo: conferir destino</option>` : ''}</select></label>
           <label>Centro de custo <select data-imp-filtro-cc><option value="">Todos</option>${ccs.map((c) => `<option value="${esc(c)}" ${s.filtroCC === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
           ${tipos.length > 1 ? `<label>Tipo <select data-imp-filtro-tipo><option value="">Todos</option>${tipos.map((t) => `<option value="${esc(t)}" ${s.filtroTipo === t ? 'selected' : ''}>${esc(L.tiposBem[t] || t)}</option>`).join('')}</select></label>` : ''}
@@ -793,7 +793,7 @@
           if (!n) return ui.aviso('Nada marcado nesta página.', 'erro');
           if (!await ui.confirmar(`Salvar só os ${u.inteiro(n)} marcado(s) desta página? As outras linhas continuam na prévia.`, { titulo: 'Salvar esta página', sim: 'Salvar' })) return;
           e.target.disabled = true;
-          try { await P.aplicar(lista); } catch (err) { ui.aviso('Não foi possível gravar: ' + err.message, 'erro'); }
+          VP.db.origem = 'importação'; try { await P.aplicar(lista); } catch (err) { ui.aviso('Não foi possível gravar: ' + err.message, 'erro'); } finally { VP.db.origem = ''; }
           re();
         });
         document.querySelectorAll('[data-imp-destino]').forEach((el) => el.addEventListener('change', () => { s.previa.itens[el.dataset.impDestino].destino = el.value; }));
@@ -808,7 +808,7 @@
           if (!n) return ui.aviso('Nada marcado para importar.', 'erro');
           if (!await ui.confirmar(`Salvar todos os ${u.inteiro(n)} marcado(s), de todas as páginas?`, { titulo: 'Importar', sim: 'Importar' })) return;
           e.target.disabled = true;
-          try { await P.aplicar(); } catch (err) { ui.aviso('Não foi possível gravar: ' + err.message, 'erro'); }
+          VP.db.origem = 'importação'; try { await P.aplicar(); } catch (err) { ui.aviso('Não foi possível gravar: ' + err.message, 'erro'); } finally { VP.db.origem = ''; }
           re();
         });
         document.querySelectorAll('[data-imp-desfazer]').forEach((b) => b.addEventListener('click', async () => {

@@ -108,7 +108,7 @@
     return {
       titulo: 'Centros de custo pendentes',
       html: `<p class="ajuda">Bens importados com um código de centro de custo que ainda não está cadastrado. Eles estão <b>sem centro de custo</b> (pendência grave). Para cada código, escolha a unidade certa e clique em <b>Ligar</b>, ou cadastre a unidade com esse código. Nada é ligado sozinho.</p>
-        ${lista.length ? `<div class="tabela-rolagem"><table class="tabela" data-sem-planilha><thead><tr><th>Código</th><th class="num">Bens</th><th class="num">Itens de controle</th><th>Ligar à unidade</th><th></th></tr></thead><tbody>
+        ${lista.length ? `<div class="tabela-rolagem"><table class="tabela" data-sem-planilha><thead><tr><th>Código</th><th class="num">Bens</th><th class="num">Relação carga</th><th>Ligar à unidade</th><th></th></tr></thead><tbody>
         ${lista.map((g) => { const sug = unidades.find((x) => String(x.codigo) === g.codigo); return `<tr><td><b>${esc(g.codigo)}</b></td><td class="num">${u.inteiro(g.bens.length)}</td><td class="num">${u.inteiro(g.controle.length)}</td>
           <td>${pode ? `<select data-cc-un="${esc(g.codigo)}"><option value="">Escolha…</option>${unidades.map((x) => `<option value="${esc(x.id)}" ${sug && sug.id === x.id ? 'selected' : ''}>${esc(x.codigo)} · ${esc(x.nome)}</option>`).join('')}</select>${sug ? ' <small>(mesmo código)</small>' : ''}` : ''}</td>
           <td>${pode ? `<button class="botao pequeno primario" data-cc-ligar="${esc(g.codigo)}">Ligar</button> ${sug ? '' : `<button class="botao pequeno" data-cc-criar="${esc(g.codigo)}">Cadastrar unidade com este código</button>`}` : ''}</td></tr>`; }).join('')}

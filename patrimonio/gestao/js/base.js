@@ -114,7 +114,7 @@ VP.LISTAS = {
   status: { ativo: 'Em uso', desuso: 'Em desuso', inservivel: 'Inservível', cedido: 'Fora (cedido/emprestado)', manutencao: 'Em conserto', baixado: 'Baixado' },
   // Escala do livro de controle patrimonial + "Novo". 1 = Imprestável (vai para baixa).
   estados: { 8: 'Novo', 7: 'Ótimo', 6: 'Muito bom', 5: 'Bom', 4: 'Regular', 3: 'Ruim', 2: 'Péssimo', 1: 'Imprestável' },
-  situacoesAquisicao: ['Compra', 'Doação recebida', 'Cessão recebida', 'Permuta', 'Construção / obra', 'Desapropriação', 'Dação em pagamento', 'Loteamento (área pública)', 'Saldo inicial'],
+  situacoesAquisicao: ['Compra', 'Doação recebida', 'Cessão recebida', 'Comodato recebido', 'Empréstimo recebido', 'Permuta', 'Construção / obra', 'Desapropriação', 'Dação em pagamento', 'Loteamento (área pública)', 'Saldo inicial'],
   // Imóveis (livro "Gestão patrimonial", item 4.2 — etapa 1, 28/10/2026)
   usosImovel: ['Uso comum do povo', 'Uso especial', 'Dominical', 'Em andamento (obra)', 'Demais bens imóveis'],
   origensImovel: ['Compra', 'Construção', 'Doação', 'Permuta', 'Usucapião', 'Desapropriação', 'Dação em pagamento', 'Herança vacante', 'Herança jacente (sob curador, ainda não incorporada)', 'Área pública de loteamento', 'Outra'], // jacente: livro pág. 329 (29/10/2026)
@@ -385,6 +385,17 @@ VP.colunasRegistro = (bem = false) => [
   { chave: '_criadoEm', titulo: 'Cadastrado em', oculta: true, valor: (x) => { const c = VP.datasRegistro(x, bem).criado; return c ? `${VP.textoDataHora(c.em)}${c.importado ? ' (importado)' : ''}` : 'sem registro'; }, ordenar: (x) => VP.datasRegistro(x, bem).criado?.em || '' },
   { chave: '_alteradoEm', titulo: 'Última alteração', oculta: true, valor: (x) => { const a = VP.datasRegistro(x, bem).alterado; return a ? `${VP.textoDataHora(a.em)} · ${a.por || ''}` : 'sem registro'; }, ordenar: (x) => x._alteradoEm || '' }
 ];
+
+// Bem de terceiros (decisão do usuário, 30/10/2026): cessão, comodato ou empréstimo recebidos, ou imóvel em uso pela prefeitura
+// com cessão "de terceiros" em vigor. Fica nas listas e no inventário, mas fora do balancete e sem depreciação — a não ser que o
+// controle tenha passado à prefeitura (cessão longa: o manual de contabilidade manda reconhecer como ativo) [A conferir com a contabilidade].
+VP.SITUACOES_TERCEIROS = ['Cessão recebida', 'Comodato recebido', 'Empréstimo recebido'];
+VP.deTerceiros = (b) => {
+  if (!b || b.controleTransferido) return false;
+  if (VP.SITUACOES_TERCEIROS.includes(b.situacaoAquisicao)) return true;
+  const hoje = VP.Plataforma.hoje();
+  return (VP.db.dados.cessoesImovel ? VP.db.lista('cessoesImovel') : []).some((c) => c.bemId === b.id && c.direcao === 'de-terceiros' && !c.encerradaEm && (!c.fim || c.fim >= hoje));
+};
 
 // Nome do desgaste: amortização (intangível), exaustão (recursos retirados) ou depreciação (29/10/2026)
 VP.desgaste = (b) => (b?.tipo === 'intangivel' ? 'Amortização' : b?.depreciacao?.metodo === 'exaustao' ? 'Exaustão' : 'Depreciação');

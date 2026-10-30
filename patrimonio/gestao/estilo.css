@@ -194,7 +194,7 @@ a.numero-destaque:hover { border-color: var(--primaria); }
 
 /* selos */
 .selo-status, .selo-venc { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
-.s-ativo { color: var(--ok-texto); } .s-desuso { color: #a35a00; } .s-cedido, .s-manutencao { color: var(--primaria); } .s-baixado { color: var(--suave); }
+.s-ativo { color: var(--ok-texto); } .s-desuso { color: #a35a00; } .s-cedido, .s-manutencao { color: var(--primaria); } .s-baixado { color: var(--suave); } .s-terceiros { color: #6b4fa0; }
 .t-pendente { color: #a35a00; } .t-aceita, .t-devolvida { color: var(--ok-texto); } .t-recusada { color: var(--critico); }
 .v-vigente { color: var(--ok-texto); } .v-vencendo { color: #a35a00; } .v-vencido { color: var(--critico); }
 

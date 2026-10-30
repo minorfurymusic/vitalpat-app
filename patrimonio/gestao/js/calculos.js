@@ -133,6 +133,7 @@
   VP.naoDeprecia = (bem) => {
     const p = bem.depreciacao || {};
     if (!p.automatica) return true;
+    if (VP.deTerceiros(bem)) return true; // bem de terceiros: não deprecia (30/10/2026)
     // intangível só amortiza se tem prazo (vida útil definida); sem prazo = vida útil indefinida, não amortiza (29/10/2026)
     if (bem.tipo === 'intangivel' && !VP.saldo(bem).vidaUtilMeses) return true;
     const cl = VP.db.pega('classificacoes', bem.classificacaoId);
@@ -391,7 +392,7 @@
   VP.ultimoFechamento = () => VP.db.lista('fechamentos').filter((f) => f.situacao === 'fechado').sort((a, b) => b.mes.localeCompare(a.mes))[0] || null;
 
   VP.movimentosAContabilizar = () => VP.db.lista('eventos')
-    .filter((e) => !e.cancelado && !e.contabilizado && VP.LISTAS.eventos[e.tipo]?.grupo === 'financeiro' && e.tipo !== 'estorno');
+    .filter((e) => !e.cancelado && !e.contabilizado && VP.LISTAS.eventos[e.tipo]?.grupo === 'financeiro' && e.tipo !== 'estorno' && !VP.deTerceiros(VP.db.pega('bens', e.bemId)));
 
   // ------------------------------------------------------------- inventário
   VP.progressoInventario = (inv) => {

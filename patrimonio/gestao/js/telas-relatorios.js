@@ -64,7 +64,7 @@
     extras: [{ chave: 'detalhar', rotulo: 'Detalhar bens', tipo: 'bool' }],
     gerar(f) {
       const antes = u.somaDias(f.de, -1);
-      const bens = bensDoFiltro(Object.assign({}, f, { baixados: true })).filter((b) => (b.dataIncorporacao || '') <= f.ate);
+      const bens = bensDoFiltro(Object.assign({}, f, { baixados: true })).filter((b) => (b.dataIncorporacao || '') <= f.ate).filter((b) => !VP.deTerceiros(b)); // bens de terceiros ficam fora (30/10/2026)
       const linhas = bens.map((b) => {
         const evs = VP.eventosDoBem(b.id).filter((e) => e.data >= f.de && e.data <= f.ate);
         const ent = evs.filter((e) => e.tipo === 'incorporacao' || e.tipo === 'agregacao' || (e.tipo === 'reavaliacao' && e.valor > 0)).reduce((t, e) => t + (e.valor || 0), 0);
@@ -94,7 +94,7 @@
     grupo: 'Visão geral', titulo: 'Nota explicativa: depreciação e reavaliação', descricao: 'Texto pronto da política de depreciação, amortização, exaustão e reavaliação, montado com as classificações e os bens, para as notas do balanço.',
     filtros: ['entidadeId', 'ate'], padrao: () => ({ ate: hoje() }),
     gerar(f) {
-      const bens = bensDoFiltro(f).filter((b) => (b.dataIncorporacao || '') <= f.ate);
+      const bens = bensDoFiltro(f).filter((b) => (b.dataIncorporacao || '') <= f.ate).filter((b) => !VP.deTerceiros(b)); // bens de terceiros ficam fora (30/10/2026)
       if (!bens.length) return { vazio: 'Nenhum bem até esta data.' };
       const cfg = VP.config();
       const metodo = (b) => (VP.naoDeprecia(b) ? 'nao' : b.depreciacao?.metodo || 'linear');
@@ -133,7 +133,7 @@
     grupo: 'Visão geral', titulo: 'Resumo patrimonial', descricao: 'Quanto há em cada grupo: quantidade, valor de aquisição, depreciação e valor líquido.',
     filtros: ['entidadeId', 'unidadeId', 'contaId', 'tipo', 'cidade', 'bairro', 'logradouro'],
     gerar(f) {
-      const bens = bensDoFiltro(f);
+      const bens = bensDoFiltro(f).filter((b) => !VP.deTerceiros(b));
       const grupos = new Map();
       for (const b of bens) {
         const g = VP.grupoDe(b.classificacaoId)?.nome || 'Sem classificação';

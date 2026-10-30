@@ -196,19 +196,42 @@
   // Benfeitoria feita pela prefeitura em imóvel de terceiros (locação, comodato recebido): fica registrada na cessão e não soma ao valor do imóvel.
   E.benfeitoriaEmTerceiros = (b, c, depois) => ui.formulario({
     titulo: `Benfeitoria no imóvel de ${c.parte}`, largura: 'media',
-    intro: '<p class="aviso-inline">O imóvel é de terceiros: a benfeitoria <b>não soma</b> ao valor deste cadastro. Ela fica registrada aqui, com o valor e se o dono deve indenizar, para cobrar na devolução. <b>Comunique o dono</b> por escrito, conforme o contrato.</p>',
+    intro: `<p class="aviso-inline">O imóvel é de terceiros: a benfeitoria <b>não soma</b> ao valor deste cadastro. Ela vira um <b>bem próprio</b> da prefeitura, na classificação "${E.CLASSE_BENF_TERC}", e se desgasta pelo prazo do contrato${c.fim ? ` (até ${u.data(c.fim)})` : ''} ou pela vida útil da reforma, o que for menor. Fica registrada também aqui, com o valor e se o dono deve indenizar, para cobrar na devolução. <b>Comunique o dono</b> por escrito, conforme o contrato.</p>`,
     campos: [{ chave: 'descricao', rotulo: 'O que foi feito', tipo: 'area', obrigatorio: true },
       { chave: 'classe', rotulo: 'Tipo de benfeitoria (Código Civil, art. 96)', tipo: 'select', opcoes: Object.entries(E.CLASSES_BENF), obrigatorio: true },
       { chave: 'valor', rotulo: 'Valor (R$)', tipo: 'moeda', obrigatorio: true, largura: 'meia' }, { chave: 'data', rotulo: 'Data', tipo: 'data', obrigatorio: true, padrao: hoje(), largura: 'meia' },
       { chave: 'indenizavel', rotulo: 'O dono deve indenizar?', tipo: 'select', opcoes: [['sim', 'Sim (o contrato prevê)'], ['nao', 'Não'], ['conferir', 'A conferir no contrato']], vazio: false, largura: 'meia' },
-      { chave: 'documento', rotulo: 'Documento (nota, contrato, ofício ao dono)', largura: 'meia' }],
+      { chave: 'documento', rotulo: 'Documento (nota, contrato, ofício ao dono)', largura: 'meia' },
+      { chave: 'vidaReforma', rotulo: `Vida útil da reforma (meses)${c.fim ? ', vazio = prazo do contrato' : ''}`, tipo: 'numero', obrigatorio: !c.fim, largura: 'meia', ajuda: c.fim ? 'Se a reforma dura menos que o contrato, vale a vida útil da reforma.' : 'O contrato não tem data de fim: informe quanto tempo a reforma dura.' }],
     salvar: async (v) => {
-      const x = Object.assign({ id: u.id(), criadoEm: agora(), usuario: usuario() }, v);
+      const prazo = E.mesesAte(v.data, c.fim);
+      if (c.fim && prazo < 1) return 'A data da benfeitoria é depois do fim do contrato.';
+      if (v.vidaReforma != null && v.vidaReforma < 1) return 'A vida útil da reforma deve ser de pelo menos 1 mês.';
+      const vida = Math.floor(Math.min(...[prazo, v.vidaReforma].filter((n) => n != null && n > 0)));
+      // bem próprio na classificação "Benfeitorias em bens de terceiros" (decisão do usuário, 30/10/2026)
+      const cl = await E.garantirClasseBenfTerc(b);
+      const [nb] = await VP.criarBens({ descricao: `Benfeitoria no imóvel de ${c.parte}: ${v.descricao}`, classificacaoId: cl.id, unidadeId: b.unidadeId, entidadeId: b.entidadeId, dataAquisicao: v.data, dataIncorporacao: v.data, valor: v.valor, residualTipo: 'percentual', residual: 0, quantidade: 1 });
+      const x = Object.assign({ id: u.id(), criadoEm: agora(), usuario: usuario(), bemId: nb.id, vidaMeses: vida }, v);
+      Object.assign(nb.depreciacao, { automatica: true, metodo: 'linear', tabela: '', linhaTabela: '', taxaAnual: null, vidaUtilMeses: vida, residualTipo: 'percentual', residual: 0 });
+      nb.benfeitoriaDe = { bemId: b.id, cessaoId: c.id, benfeitoriaId: x.id };
       c.benfeitorias = (c.benfeitorias || []).concat(x);
-      await VP.db.gravarVarias({ cessoesImovel: [c], eventos: [evento(b, `Benfeitoria ${E.CLASSES_BENF_CURTO[v.classe].toLowerCase()} no imóvel de ${c.parte}: ${v.descricao} · ${u.moeda(v.valor)} · indenizável: ${{ sim: 'sim', nao: 'não', conferir: 'a conferir' }[v.indenizavel]}`, { cessaoId: c.id, benfeitoriaId: x.id })] });
-      ui.aviso('Benfeitoria registrada.'); depois && depois();
+      await VP.db.gravarVarias({ bens: [nb], cessoesImovel: [c], eventos: [evento(b, `Benfeitoria ${E.CLASSES_BENF_CURTO[v.classe].toLowerCase()} no imóvel de ${c.parte}: ${v.descricao} · ${u.moeda(v.valor)} · indenizável: ${{ sim: 'sim', nao: 'não', conferir: 'a conferir' }[v.indenizavel]} · bem próprio ${nb.codigo}, ${vida} meses`, { cessaoId: c.id, benfeitoriaId: x.id, bemId: nb.id })] });
+      ui.aviso(`Benfeitoria registrada. Bem próprio ${nb.codigo} criado (${vida} meses).`); depois && depois();
     }
   });
+  // meses inteiros de uma data até outra (vazio = sem fim)
+  E.mesesAte = (de, ate) => { if (!ate) return null; const [a1, m1] = de.split('-').map(Number), [a2, m2] = ate.split('-').map(Number); return (a2 - a1) * 12 + (m2 - m1); };
+  E.CLASSE_BENF_TERC = 'Benfeitorias em bens de terceiros';
+  // cria a classificação dentro do grupo dos imóveis quando ainda não existe; conta vem da classificação do imóvel (conferir com a contabilidade)
+  E.garantirClasseBenfTerc = async (b) => {
+    const achada = VP.db.lista('classificacoes').find((x) => u.normalizar(x.nome) === u.normalizar(E.CLASSE_BENF_TERC));
+    if (achada) return achada;
+    const grupo = VP.grupoDe(b.classificacaoId) || VP.db.lista('classificacoes').find((x) => !x.paiId && x.tipoBem === 'imovel');
+    const dc = VP.dadosDaClassificacao(b.classificacaoId);
+    const cl = { id: u.id(), nome: E.CLASSE_BENF_TERC, paiId: grupo?.id || '', nivel: grupo ? 'classe' : 'grupo', tipoBem: grupo ? '' : 'imovel', contaId: dc.contaId || '', residualPct: 0, naoDeprecia: false, criadoPeloBem: true };
+    await VP.db.gravar('classificacoes', cl);
+    return cl;
+  };
   // ------------------------------------------------------------------ baixa parcial, dividir e juntar (livro 4.2, págs. 348 e 355; etapa 5, 28/10/2026)
   const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
   const copiaImovel = (im) => { const c = JSON.parse(JSON.stringify(im || {})); delete c.benfeitorias; delete c.docsNaoAplica; delete c.matricula; delete c.areaTerreno; delete c.frente; delete c.fundos; delete c.lateralDireita; delete c.lateralEsquerda; delete c.confrontacoes; delete c.lat; delete c.lon; return c; };

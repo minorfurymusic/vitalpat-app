@@ -29,7 +29,7 @@
   };
   VP.opc = opc;
   VP.opcClassificacoes = opcClassificacoes;
-  const etiquetaStatus = (b) => `<span class="selo-status s-${esc(b.status)}">${esc(L.status[b.status] || b.status)}</span>`;
+  const etiquetaStatus = (b) => `<span class="selo-status s-${esc(b.status)}">${esc(L.status[b.status] || b.status)}</span>${VP.deTerceiros(b) ? ' <span class="selo-status s-terceiros" title="Não é da prefeitura: fora do balancete e sem depreciação">De terceiros</span>' : ''}`;
   const estadoTxt = (e) => L.estados[e] || '—';
   VP.etiquetaStatus = etiquetaStatus;
 
@@ -522,7 +522,8 @@
       { chave: 'complemento', rotulo: 'Complemento', tipo: 'area' },
       { chave: 'classificacaoId', rotulo: 'Classificação', tipo: 'select', opcoes: opcClassificacoes(), obrigatorio: true },
       { chave: 'detalhes.tombamento', rotulo: 'Número de tombamento', largura: 'meia' }, { chave: 'detalhes.dataTombamento', rotulo: 'Data do tombamento', tipo: 'data', largura: 'meia' },
-      { chave: 'situacaoAquisicao', rotulo: 'Como entrou', tipo: 'select', opcoes: L.situacoesAquisicao.map((x) => [x, x]) },
+      { chave: 'situacaoAquisicao', rotulo: 'Como entrou', tipo: 'select', opcoes: L.situacoesAquisicao.map((x) => [x, x]), ajuda: 'Cessão, comodato ou empréstimo recebidos = bem de terceiros: fica fora do balancete e não deprecia.' },
+      { chave: 'controleTransferido', rotulo: 'Bem de terceiros, mas o controle passou à prefeitura (cessão longa): entra no balancete e deprecia', tipo: 'bool', ajuda: 'Marque só com a orientação da contabilidade. Pelo manual de contabilidade pública, cessão com transferência do controle é reconhecida como ativo.' },
       { chave: 'dataAquisicao', rotulo: 'Data de aquisição', tipo: 'data', largura: 'meia' }, { chave: 'dataIncorporacao', rotulo: 'Data de incorporação', tipo: 'data', largura: 'meia' },
       { chave: 'comissaoId', rotulo: 'Comissão', tipo: 'select', opcoes: opc('comissoes') },
       { chave: 'exerciciosAnteriores', rotulo: 'Bem de exercícios anteriores', tipo: 'bool' },
@@ -890,7 +891,9 @@
           if (cfg.codigoManual && VP.db.lista('bens', true).some((x) => x.codigo === v.codigo)) { erro.textContent = 'Já existe bem com este código.'; return; }
           const dcRes = dadosPrevistos(textoCl, document.querySelector('#achado-classe [data-mae]')?.value || '', tipo);
           if (tipo === 'intangivel' && !v.prazoMeses) { v.prazoMeses = 0; if (v.residual == null) v.residual = 0; }
-          if (!dcRes.naoDeprecia && !(tipo === 'intangivel' && !v.prazoMeses)) {
+          const terceiros = VP.SITUACOES_TERCEIROS.includes(v.situacaoAquisicao) && !v.controleTransferido; // de terceiros não deprecia: residual não é pedido
+          if (terceiros && v.residual == null) v.residual = 0;
+          if (!dcRes.naoDeprecia && !terceiros && !(tipo === 'intangivel' && !v.prazoMeses)) {
             if (v.residual == null) { erro.textContent = 'Informe o Valor residual (em % ou R$). O valor do bem nunca fica abaixo dele.'; return; }
             if (v.residual < 0 || (v.residualTipo === 'percentual' && v.residual >= 100) || (v.residualTipo === 'valor' && v.residual >= v.valor)) { erro.textContent = v.residualTipo === 'valor' ? 'O valor residual (R$) deve ser menor que o valor de aquisição.' : 'O valor residual (%) deve ser de 0 a 99.'; return; }
           }

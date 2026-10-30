@@ -24,10 +24,10 @@
   // ======================================================== PAINEL
   T.painel = () => {
     const bens = VP.db.lista('bens').filter((b) => b.status !== 'baixado');
-    const total = bens.reduce((t, b) => t + VP.saldo(b).liquido, 0);
+    const total = bens.filter((b) => !VP.deTerceiros(b)).reduce((t, b) => t + VP.saldo(b).liquido, 0); // bens de terceiros ficam fora (B-01)
     const pend = VP.pendencias();
     const ult = VP.ultimoFechamento();
-    const porUnidade = [...u.agruparSoma(bens, 'unidadeId', (b) => VP.saldo(b).liquido)].map(([id, v]) => ({ rotulo: VP.db.pega('unidades', id)?.nome || 'Sem unidade', valor: v, link: '#unidade/' + id })).sort((a, b) => b.valor - a.valor);
+    const porUnidade = [...u.agruparSoma(bens.filter((b) => !VP.deTerceiros(b)), 'unidadeId', (b) => VP.saldo(b).liquido)].map(([id, v]) => ({ rotulo: VP.db.pega('unidades', id)?.nome || 'Sem unidade', valor: v, link: '#unidade/' + id })).sort((a, b) => b.valor - a.valor);
     const porEstado = Object.entries(L.estados).reverse().map(([k, n]) => ({ rotulo: n, valor: bens.filter((b) => String(b.estado) === k).length, link: '#bens' }));
     const hoje = VP.Plataforma.hoje().slice(0, 7);
     const meses = Array.from({ length: 12 }, (_, i) => u.somaMeses(hoje, i - 11));

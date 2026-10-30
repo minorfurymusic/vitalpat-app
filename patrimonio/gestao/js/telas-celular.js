@@ -399,7 +399,7 @@
       <p><b>Unidade:</b> ${esc(VP.nome('unidades', t.unidadeId))}${inv ? ` · <b>Inventário:</b> ${esc(inv.numero)}` : ''}</p>
       <p>Eu, <b>${esc(r.nome || nomeResp(t.responsavelId))}</b>, matrícula ${esc(r.matricula || '________')}, cargo ${esc(r.cargo || '________')}, declaro que recebi os bens abaixo, conferidos nesta data, e assumo a responsabilidade pela sua guarda, conservação e uso adequado. Comprometo-me a comunicar ao Setor de Patrimônio qualquer transferência, dano, extravio ou furto.</p>
       <table><thead><tr><th>Plaqueta</th><th>Bem</th><th>Estado</th>${completo ? '<th>Local</th>' : ''}</tr></thead><tbody>
-        ${linhas.map((b) => `<tr><td>${esc(b.plaqueta)}</td><td>${esc(b.descricao)}</td><td>${esc(nomeEstado(leit(b).estado ?? b.estado))}</td>${completo ? `<td>${esc(leit(b).localizacao ?? b.localizacao ?? '')}</td>` : ''}</tr>`).join('')}
+        ${linhas.map((b) => `<tr><td>${esc(b.plaqueta)}</td><td>${esc(b.descricao)}${VP.deTerceiros(b) ? ' <span class="selo-status s-terceiros">De terceiros</span>' : ''}</td><td>${esc(nomeEstado(leit(b).estado ?? b.estado))}</td>${completo ? `<td>${esc(leit(b).localizacao ?? b.localizacao ?? '')}</td>` : ''}</tr>`).join('')}
         ${!completo && bens.length > linhas.length ? `<tr><td colspan="3">+ ${bens.length - linhas.length} bem(ns) (lista completa no PDF)</td></tr>` : ''}
       </tbody></table>
       <p><b>Total:</b> ${bens.length} bem(ns)</p>
@@ -543,7 +543,7 @@
           const de = inv.esperados[b.id] ? '' : `<div class="aviso-inline">Este bem está cadastrado em <b>${esc(VP.nome('unidades', b.unidadeId))}</b>. Se salvar, ele aparece na análise como achado aqui (vira transferência se aprovado).</div>`;
           const ja = l ? `<div class="aviso-inline">Já lido neste inventário em ${esc(u.data(dataLocal(l.em)))} às ${esc(horaLocal(l.em))}. Salvar de novo substitui a leitura anterior (não conta duas vezes).</div>` : '';
           abrirForm(`<form class="cel-form">
-            <div class="cel-bem"><b>${esc(b.descricao)}</b><span>Plaqueta ${esc(b.plaqueta)} · ${origem === 'camera' ? 'lida pela câmera' : 'digitada'}</span></div>${de}${ja}
+            <div class="cel-bem"><b>${esc(b.descricao)}</b>${VP.deTerceiros(b) ? ' <span class="selo-status s-terceiros">De terceiros</span>' : ''}<span>Plaqueta ${esc(b.plaqueta)} · ${origem === 'camera' ? 'lida pela câmera' : 'digitada'}</span></div>${de}${ja}
             <dl class="cel-ficha"><dt>No cadastro: unidade</dt><dd>${esc(VP.nome('unidades', b.unidadeId))}</dd><dt>Responsável</dt><dd>${esc(nomeResp(b.responsavelId))}</dd><dt>Estado</dt><dd>${esc(nomeEstado(b.estado))}</dd><dt>Sala / local</dt><dd>${esc(b.localizacao || '—')}</dd></dl>
             <label class="cel-rotulo">Estado de conservação hoje</label>${botoesEstado(l?.estado ?? b.estado)}
             <label class="cel-rotulo">Responsável agora<select data-resp>${opResp(l?.responsavelId ?? b.responsavelId)}</select></label>

@@ -337,11 +337,11 @@
       const linhas = ids.map((id) => VP.db.pega('bens', id)).filter(Boolean);
       return `<div class="leitor-linha"><label>Ler ou digitar plaqueta <input data-leitura placeholder="Plaqueta e Enter" autocomplete="off"></label></div>
         <p class="ajuda">Marque o que foi achado. Se o bem estiver em mau estado, mude o estado.</p>
-        <table class="tabela"><thead><tr><th>Achado</th><th>Plaqueta</th><th>Bem</th><th>Estado</th><th>Situação</th></tr></thead><tbody>
+        <div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Achado</th><th>Plaqueta</th><th>Bem</th><th>Estado</th><th>Situação</th></tr></thead><tbody>
         ${linhas.map((b) => { const l = inv.leituras[b.id]; return `<tr><td><input type="checkbox" data-achei="${esc(b.id)}" ${l ? 'checked' : ''} ${l && l.unidadeId !== unidadeId ? 'disabled' : ''}></td><td>${esc(b.plaqueta)}</td><td>${esc(b.descricao)}</td><td><select data-estado="${esc(b.id)}">${Object.entries(L.estados).reverse().map(([k, n]) => `<option value="${k}" ${String(l?.estado ?? b.estado) === k ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${l ? (l.unidadeId === unidadeId ? '✓ no lugar' : `achado em ${esc(VP.nome('unidades', l.unidadeId))}`) : '—'}</td></tr>`; }).join('')}
         ${Object.entries(inv.leituras).filter(([id, l]) => l.unidadeId === unidadeId && inv.esperados[id] !== unidadeId).map(([id]) => { const b = VP.db.pega('bens', id); return `<tr class="chegou"><td>✓</td><td>${esc(b.plaqueta)}</td><td>${esc(b.descricao)}</td><td>${esc(L.estados[inv.leituras[id].estado])}</td><td>veio de ${esc(VP.nome('unidades', inv.esperados[id]))}</td></tr>`; }).join('')}
         ${(inv.sobras || []).filter((s) => s.unidadeId === unidadeId).map((s) => `<tr class="sobra"><td>＋</td><td>${esc(s.plaqueta)}</td><td>${esc(s.descricao)}</td><td></td><td>sobra (sem cadastro)</td></tr>`).join('')}
-        </tbody></table>`;
+        </tbody></table></div>`;
     };
     const m = ui.modal({ titulo: `Conferir: ${un.nome}`, largura: 'grande', corpo: `<div data-conf>${desenhar()}</div>`, botoes: [{ texto: 'Fechar', classe: 'primario', acao: () => VP.app.render() }] });
     const redesenhar = () => { m.el.querySelector('[data-conf]').innerHTML = desenhar(); m.el.querySelector('[data-leitura]').focus(); };
@@ -502,9 +502,9 @@
           <button class="botao primario grande" data-fechar>Fechar ${cfg.depreciacaoAnual && meses.length > 1 ? 'os meses' : 'o mês'}</button>` : '<p>Volte depois do fim do mês.</p>'}
         </section>
         <section class="cartao"><h3>Fechamentos</h3>
-          <table class="tabela"><thead><tr><th>Mês</th><th class="num">Bens</th><th class="num">Total</th><th>Situação</th><th>Quando</th><th></th></tr></thead><tbody>
+          <div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Mês</th><th class="num">Bens</th><th class="num">Total</th><th>Situação</th><th>Quando</th><th></th></tr></thead><tbody>
           ${hist.map((f, i) => `<tr><td>${u.mesExtenso(f.mes)}</td><td class="num">${u.inteiro(f.qtd)}</td><td class="num">${u.moeda(f.total)}</td><td>${f.situacao === 'fechado' ? 'Fechado' : 'Desfeito'}</td><td>${u.data(f.fechadoEm)}</td><td>${f.situacao === 'fechado' && f.id === ult?.id && i === hist.findIndex((x) => x.situacao === 'fechado') ? '<button class="botao pequeno" data-desfazer>Desfazer</button>' : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum.</td></tr>'}
-          </tbody></table></section>`,
+          </tbody></table></div></section>`,
       ligar() {
         document.querySelector('[data-fechar]')?.addEventListener('click', async () => {
           if (!await ui.confirmar(`Lançar a depreciação de ${meses.map(u.mesExtenso).join(', ')}?`, { titulo: 'Fechar', sim: 'Fechar' })) return;
@@ -575,9 +575,9 @@
           <button class="botao primario grande" data-aplicar-reav>Aplicar reavaliação</button>
         </section>` : ''}
         <section class="cartao"><h3>Blocos já reavaliados</h3>
-          <table class="tabela"><thead><tr><th>Data</th><th>Laudo</th><th class="num">Bens</th><th class="num">Antes</th><th class="num">Depois</th><th>Situação</th><th></th></tr></thead><tbody>
+          <div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Data</th><th>Laudo</th><th class="num">Bens</th><th class="num">Antes</th><th class="num">Depois</th><th>Situação</th><th></th></tr></thead><tbody>
           ${hist.map((r) => `<tr><td>${u.data(r.data)}</td><td>${esc(r.laudo)}</td><td class="num">${r.qtd}</td><td class="num">${u.moeda(r.antes)}</td><td class="num">${u.moeda(r.depois)}</td><td>${r.situacao === 'aplicada' ? 'Aplicada' : 'Desfeita'}</td><td>${r.situacao === 'aplicada' ? `<button class="botao pequeno" data-desfazer-reav="${esc(r.id)}">Desfazer</button> ` : ''}<button class="botao pequeno" data-laudo-reav="${esc(r.id)}">Laudo</button></td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum.</td></tr>'}
-          </tbody></table></section>`;
+          </tbody></table></div></section>`;
     };
     const atualizar = () => { document.getElementById('area-reav').innerHTML = desenhar(); ligar(); };
     const recalcular = () => {

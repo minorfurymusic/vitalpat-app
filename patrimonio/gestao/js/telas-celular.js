@@ -66,6 +66,7 @@
       const i = raiz.querySelector('[data-codigo]');
       const v = i.value.trim(); i.value = '';
       if (v) aoLer(v, 'digitado');
+      else { VP.ui.aviso('Digite o número da plaqueta ou aponte a câmera para o código.', 'erro'); i.focus(); } // antes: nada acontecia (inspeção 30/10/2026)
     });
     const video = raiz.querySelector('[data-camera] video');
     if (!video) return;

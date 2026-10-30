@@ -177,7 +177,7 @@
     st.pagina = Math.min(st.pagina, paginas - 1);
     const pagina = linhas.slice(st.pagina * por, st.pagina * por + por);
     const todasMarcadas = linhas.length && linhas.every((l) => st.selecionados.has(l[k]));
-    const cab = cols.map((c) => `<th class="${c.num ? 'num' : ''}" data-ordenar="${esc(c.chave)}" aria-sort="${st.ordem?.chave === c.chave ? (st.ordem.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button">${esc(c.titulo)}${st.ordem?.chave === c.chave ? (st.ordem.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('');
+    const cab = cols.map((c) => (!c.titulo ? `<th aria-label="${esc(c.chave === '_acoes' ? 'Ações' : c.chave)}"></th>` : `<th class="${c.num ? 'num' : ''}" data-ordenar="${esc(c.chave)}" aria-sort="${st.ordem?.chave === c.chave ? (st.ordem.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button">${esc(c.titulo)}${st.ordem?.chave === c.chave ? (st.ordem.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`)).join('');
     const corpo = pagina.map((l) => `<tr data-chave="${esc(l[k])}" class="${cfg.aoClicar ? 'clicavel' : ''} ${st.selecionados.has(l[k]) ? 'marcada' : ''}">
         ${cfg.selecao ? `<td class="sel"><input type="checkbox" aria-label="Marcar" ${st.selecionados.has(l[k]) ? 'checked' : ''}></td>` : ''}
         ${cols.map((c) => `<td class="${c.num ? 'num' : ''}">${c.html ? c.html(l) : esc(c.formato ? c.formato(c.valor ? c.valor(l) : l[c.chave]) : (c.valor ? c.valor(l) : l[c.chave]))}</td>`).join('')}
@@ -343,9 +343,9 @@
     const disponiveis = defs.filter((d) => !ativos.includes(d));
     const ctl = (d) => {
       const v = valores[d.chave];
-      if (d.tipo === 'select') return `<select data-filtro="${d.chave}">${d.opcoes.map(([ov, ot]) => `<option value="${esc(ov)}" ${String(ov) === String(v) ? 'selected' : ''}>${esc(ot)}</option>`).join('')}</select>`;
+      if (d.tipo === 'select') return `<select data-filtro="${d.chave}" aria-label="${esc(d.rotulo)}">${d.opcoes.map(([ov, ot]) => `<option value="${esc(ov)}" ${String(ov) === String(v) ? 'selected' : ''}>${esc(ot)}</option>`).join('')}</select>`;
       if (d.tipo === 'bool') return '';
-      return `<input data-filtro="${d.chave}" type="${d.tipo === 'data' ? 'date' : 'text'}" value="${esc(v)}" size="${d.tamanho || 10}">`;
+      return `<input data-filtro="${d.chave}" type="${d.tipo === 'data' ? 'date' : 'text'}" value="${esc(v)}" size="${d.tamanho || 10}" aria-label="${esc(d.rotulo)}">`;
     };
     const html = `<div class="filtros" id="filtros-${esc(id)}">
         ${busca ? `<input type="search" class="busca" data-filtro="busca" value="${esc(valores.busca || '')}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">` : ''}

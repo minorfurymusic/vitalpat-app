@@ -872,7 +872,8 @@
     return {
       numero: tag(ide, 'nNF'), serie: tag(ide, 'serie'), emissao: (tag(ide, 'dhEmi') || tag(ide, 'dEmi')).slice(0, 10),
       chave: (infNFe.getAttribute('Id') || '').replace(/^NFe/, ''),
-      emitente: { cnpj: tag(emit, 'CNPJ') || tag(emit, 'CPF'), nome: tag(emit, 'xNome') }, itens
+      emitente: { cnpj: tag(emit, 'CNPJ') || tag(emit, 'CPF'), nome: tag(emit, 'xNome') }, itens,
+      destinatario: { cnpj: tag(infNFe.getElementsByTagName('dest')[0], 'CNPJ') }, naturezaOperacao: tag(ide, 'natOp')
     };
   };
   // PDF da nota fiscal (DANFE): anexado em cada bem (tipo "Nota fiscal"); a leitura dos dados fica em nota-pdf.js.
@@ -898,6 +899,20 @@
     const entidade = oc ? entidadeDoCnpj(oc.entidadeCnpj) : null;
     const cnpj = nf.emitente.cnpj.replace(/\D/g, '');
     const fornecedor = VP.db.lista('fornecedores').find((x) => String(x.documento || '').replace(/\D/g, '') === cnpj && cnpj);
+    // nota já registrada (mesma chave; sem chave, mesmo número e mesmo fornecedor): só avisa (DOSSIE A6.6, decisão de 14/10/2026)
+    if (!nf.doOC) {
+      const docForn = (x) => String(VP.db.pega('fornecedores', x.fornecedorId)?.documento || '').replace(/\D/g, '');
+      const mesma = (x) => (nf.chave ? x.nf?.chave === nf.chave : nf.numero && cnpj && String(x.nf?.numero || '') === String(nf.numero) && docForn(x) === cnpj);
+      const ja = VP.db.lista('bens', true).filter(mesma).concat(VP.controle ? VP.db.lista('bensControle', true).filter(mesma) : []);
+      // destinatário, natureza da operação e unidade fracionada (DOSSIE A6.6, avisos decididos em 14/10/2026): só avisam
+      const cnpjsEnt = VP.db.lista('entidades').map((x) => String(x.documento || x.cnpj || '').replace(/\D/g, '')).filter(Boolean);
+      const dest = String(nf.destinatario?.cnpj || '').replace(/\D/g, '');
+      if (dest && cnpjsEnt.length && !cnpjsEnt.includes(dest)) avisosOC.push(`O destinatário da nota (CNPJ ${nf.destinatario.cnpj}) não é a prefeitura nem um dos fundos cadastrados em Entidades. Confira se a nota é mesmo do município.`);
+      if (nf.naturezaOperacao && !/venda|compra/i.test(nf.naturezaOperacao)) avisosOC.push(`Natureza da operação: "${nf.naturezaOperacao}". Não parece uma venda (pode ser remessa, demonstração, comodato ou conserto): confirme antes de incorporar.`);
+      const frac = nf.itens.filter((it) => /^(kg|g|mg|t|ton|m|m2|m²|m3|m³|mt|l|lt|ml|cm|mm)$/i.test(String(it.unidade || '').trim()));
+      if (frac.length) avisosOC.push(`${frac.length} item(ns) em unidade fracionada (${[...new Set(frac.map((x) => x.unidade))].join(', ')}): normalmente não vira bem com plaqueta. Confira.`);
+      if (ja.length) avisosOC.unshift(`Esta nota já foi registrada: ${ja.length} bem(ns) ou item(ns) já têm ${nf.chave ? 'a mesma chave de acesso' : 'o mesmo número e o mesmo fornecedor'} (ex.: ${ja[0].codigo} · ${ja[0].descricao}${ja[0].excluido ? ', na Lixeira' : ''}). Confira para não incluir em dobro.`);
+    }
     const classes = classificacoesDoTipo(tipo).map(caminhoClassificacao).sort((a, b) => a.localeCompare(b, 'pt-BR'));
     // Diferenças entre a nota e o cadastro anterior (a nota vale; a pessoa pode escolher o anterior)
     const linhas = nf.itens.map((it) => {
